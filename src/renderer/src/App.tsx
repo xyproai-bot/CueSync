@@ -341,16 +341,14 @@ export default function App(): React.JSX.Element {
 
     if (audioFiles.length === 1) {
       // Single file: load immediately + add to setlist
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const path = (audioFiles[0] as any).path as string
+      const path = window.api.getPathForFile(audioFiles[0])
       openFile(path)
       const { addToSetlist } = useStore.getState()
       addToSetlist([{ path, name: audioFiles[0].name }])
     } else {
       // Multiple files: add all to setlist, load the first one
       const items = audioFiles.map(f => ({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        path: (f as any).path as string,
+        path: window.api.getPathForFile(f),
         name: f.name
       }))
       const { addToSetlist } = useStore.getState()

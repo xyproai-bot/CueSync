@@ -28,6 +28,9 @@ interface Window {
     packageProject(name: string, data: unknown, audioPaths: string[]): Promise<string | null>
     importProject(): Promise<{ preset: { name: string; data: unknown; updatedAt: string }; audioPaths: string[]; projectDir: string; presetFilePath: string } | null>
 
+    // Get filesystem path for a dragged File object (Electron 32+ requires webUtils)
+    getPathForFile(file: File): string
+
     // File utilities
     fileExists(path: string): Promise<boolean>
     relinkFile(oldPath: string): Promise<string | null>

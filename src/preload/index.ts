@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
   openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('api', {
   packageProject: (name: string, data: unknown, audioPaths: string[]) =>
     ipcRenderer.invoke('package-project', name, data, audioPaths),
   importProject: () => ipcRenderer.invoke('import-project'),
+
+  // Get filesystem path for a dragged File object (Electron 32+ requires webUtils)
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 
   // File utilities
   fileExists: (path: string) => ipcRenderer.invoke('file-exists', path),
