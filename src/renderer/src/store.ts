@@ -615,6 +615,8 @@ export const useStore = create<AppState>()(persist((set) => ({
       const presetData = ensureSetlistIds(migratePreset(result.data as PresetData))
       const presets = await loadPresetsFromDisk()
       saveActivePresetName(result.name)
+      // Move to top of recent list and rebuild the native File > Open Recent menu
+      useStore.getState().addRecentFile(path, result.name)
       set({
         ...presetData,
         loopA: presetData.loopA ?? null, loopB: presetData.loopB ?? null,
