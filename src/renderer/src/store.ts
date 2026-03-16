@@ -347,7 +347,12 @@ export const useStore = create<AppState>()(persist((set) => ({
   setLoopB: (loopB) => set((s) => {
     // If setting B and A already exists, enforce A < B
     if (loopB !== null && s.loopA !== null && loopB <= s.loopA) return s
-    return { loopB }
+    // Clamp loopB to at least 50ms before end of file so the A-B loop
+    // fires before musicSource.onended stops playback at file end
+    const clamped = loopB !== null && s.duration > 0
+      ? Math.min(loopB, s.duration - 0.05)
+      : loopB
+    return { loopB: clamped }
   }),
   clearLoop: () => set({ loopA: null, loopB: null }),
   setTimecode: (timecode) => set({ timecode }),

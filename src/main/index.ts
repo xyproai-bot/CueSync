@@ -352,9 +352,9 @@ app.whenReady().then(() => {
       const filePath = result.filePaths[0]
       const raw = readFileSync(filePath, 'utf-8')
       const parsed = JSON.parse(raw)
-      // Copy to presets folder if not already there
+      // Copy to presets folder if not already there (skip if dest already exists to avoid overwriting)
       const destPath = join(presetsDir, basename(filePath))
-      if (filePath !== destPath) {
+      if (filePath !== destPath && !existsSync(destPath)) {
         writeFileSync(destPath, raw, 'utf-8')
       }
       return { name: parsed.name, data: parsed.data, updatedAt: parsed.updatedAt ?? '', path: filePath }
