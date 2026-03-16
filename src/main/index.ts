@@ -572,33 +572,33 @@ app.whenReady().then(() => {
 
     const outPath = join(tmpdir(), `cuesync-video-audio-${Date.now()}.wav`)
 
-    await new Promise<void>((resolve, reject) => {
-      ffmpeg(filePath)
-        .noVideo()
-        .audioCodec('pcm_s16le')
-        .audioFrequency(48000)
-        .audioChannels(1)
-        .output(outPath)
-        .on('end', () => resolve())
-        .on('error', (err: Error) => {
-          // Check for no audio stream
-          if (err.message.includes('does not contain any stream') ||
-              err.message.includes('Output file #0 does not contain any stream')) {
-            reject(new Error('NO_AUDIO_TRACK'))
-          } else {
-            reject(err)
-          }
-        })
-        .run()
-    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(filePath)
+          .noVideo()
+          .audioCodec('pcm_s16le')
+          .audioFrequency(48000)
+          .audioChannels(1)
+          .output(outPath)
+          .on('end', () => resolve())
+          .on('error', (err: Error) => {
+            // Check for no audio stream
+            if (err.message.includes('does not contain any stream') ||
+                err.message.includes('Output file #0 does not contain any stream')) {
+              reject(new Error('NO_AUDIO_TRACK'))
+            } else {
+              reject(err)
+            }
+          })
+          .run()
+      })
 
-    const buffer = readFileSync(outPath)
-    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
-
-    // Clean up temp file
-    try { unlinkSync(outPath) } catch { /* ignore */ }
-
-    return arrayBuffer
+      const buffer = readFileSync(outPath)
+      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+    } finally {
+      // Clean up temp file whether ffmpeg succeeded or failed
+      try { unlinkSync(outPath) } catch { /* ignore */ }
+    }
   })
 
   ipcMain.handle('get-app-version', () => app.getVersion())

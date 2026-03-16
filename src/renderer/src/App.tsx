@@ -139,9 +139,7 @@ export default function App(): React.JSX.Element {
     // This forces the OS to establish the device connection early,
     // preventing the "locked handle" issue on Windows
     if (savedState.ltcOutputDeviceId && savedState.ltcOutputDeviceId !== 'default') {
-      engine.current.setLtcOutputDevice(savedState.ltcOutputDeviceId)
-        .then(() => engine.current?.warmUpLtcDevice())
-        .catch(() => {})
+      engine.current.setLtcOutputDevice(savedState.ltcOutputDeviceId).catch(() => {})
     }
 
     window.api.getAppVersion().then(setVersion).catch(() => {})
