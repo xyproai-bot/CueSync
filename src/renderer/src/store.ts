@@ -577,6 +577,8 @@ export const useStore = create<AppState>()(persist((set) => ({
     useStore.getState().addRecentFile(result.path ?? '', result.name)
     set({
       ...presetData,
+      loopA: presetData.loopA ?? null, loopB: presetData.loopB ?? null,
+      previousSetlist: null,
       savedPresets: presets,
       presetName: result.name,
       presetPath: result.path ?? null,
@@ -600,6 +602,8 @@ export const useStore = create<AppState>()(persist((set) => ({
       saveActivePresetName(result.name)
       set({
         ...presetData,
+        loopA: presetData.loopA ?? null, loopB: presetData.loopB ?? null,
+        previousSetlist: null,
         savedPresets: presets,
         presetName: result.name,
         presetPath: path,
@@ -631,6 +635,9 @@ export const useStore = create<AppState>()(persist((set) => ({
     const data = ensureSetlistIds(migratePreset(preset.data))
     return {
       ...data, presetName: name, presetPath: null, presetDirty: false,
+      // Explicitly reset loop points in case old preset doesn't have them
+      loopA: data.loopA ?? null, loopB: data.loopB ?? null,
+      previousSetlist: null,
       // Clear playback state
       filePath: null, fileName: null, duration: 0,
       playState: 'stopped', currentTime: 0,
@@ -657,6 +664,7 @@ export const useStore = create<AppState>()(persist((set) => ({
     saveActivePresetName(null)
     set({
       lang: 'en', rightTab: 'devices', offsetFrames: 0, loop: false,
+      loopA: null, loopB: null, previousSetlist: null,
       musicOutputDeviceId: 'default', ltcOutputDeviceId: 'default',
       ltcGain: 1.0, selectedMidiPort: null, forceFps: null,
       ltcChannel: 'auto', setlist: [],
