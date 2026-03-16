@@ -10,8 +10,17 @@ import { autoUpdater } from 'electron-updater'
 // Point fluent-ffmpeg at the bundled binary
 // In production, ffmpeg-static is asarUnpacked so we resolve manually
 const ffmpegBin = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
+// On macOS, ffmpeg-static ships arch-specific binaries in subdirectories for ARM64
 const ffmpegPath = app.isPackaged
-  ? join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', ffmpegBin)
+  ? (() => {
+      const base = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static')
+      // Try arch-specific path first (macOS ARM64: ffmpeg-static/bin/darwin/arm64/ffmpeg)
+      if (process.platform === 'darwin') {
+        const archPath = join(base, 'bin', 'darwin', process.arch, 'ffmpeg')
+        if (require('fs').existsSync(archPath)) return archPath
+      }
+      return join(base, ffmpegBin)
+    })()
   : require('ffmpeg-static')
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath)
 
@@ -295,7 +304,7 @@ function buildMenu(win: BrowserWindow, presetsDir: string): void {
         { label: 'Collect Project...', click: () => send('menu-package-project') },
         { label: 'Open Project...', click: () => send('menu-import-project') },
         { type: 'separator' },
-        { label: 'Show in Explorer', click: () => { shell.openPath(presetsDir) } },
+        { label: isMac ? 'Show in Finder' : 'Show in Explorer', click: () => { shell.openPath(presetsDir) } },
         { type: 'separator' },
         { label: 'Check for Updates...', click: () => checkForUpdates(false) },
         { type: 'separator' },
@@ -389,24 +398,30 @@ app.whenReady().then(() => {
     }
   })
 
-  // ── VB-CABLE first-launch prompt (Windows only) ──────────────
+  // ── Virtual audio cable first-launch prompt ──────────────────
   // Show once after install to let users know they need a virtual audio cable for LTC output
-  if (process.platform === 'win32' && app.isPackaged) {
+  if (app.isPackaged && (process.platform === 'win32' || process.platform === 'darwin')) {
     const vbcableFlagPath = join(app.getPath('userData'), 'vbcable-prompted.json')
     if (!existsSync(vbcableFlagPath)) {
       writeFileSync(vbcableFlagPath, '{"prompted":true}', 'utf-8')
+      const isMacPrompt = process.platform === 'darwin'
       setTimeout(async () => {
         const result = await dialog.showMessageBox(win, {
           type: 'info',
           title: 'Virtual Audio Cable Recommended',
           message: 'CueSync requires a virtual audio cable to output LTC via software.',
-          detail: 'VB-CABLE is a free virtual audio device that lets CueSync send LTC timecode to other software on your computer.\n\nIf you\'re using a physical audio interface to output LTC, you can skip this.',
-          buttons: ['Download VB-CABLE (Free)', 'Skip'],
+          detail: isMacPrompt
+            ? 'BlackHole is a free virtual audio device that lets CueSync send LTC timecode to other software on your Mac.\n\nIf you\'re using a physical audio interface to output LTC, you can skip this.'
+            : 'VB-CABLE is a free virtual audio device that lets CueSync send LTC timecode to other software on your computer.\n\nIf you\'re using a physical audio interface to output LTC, you can skip this.',
+          buttons: [isMacPrompt ? 'Download BlackHole (Free)' : 'Download VB-CABLE (Free)', 'Skip'],
           defaultId: 0,
           cancelId: 1
         })
         if (result.response === 0) {
-          shell.openExternal('https://vb-audio.com/Cable/index.htm')
+          shell.openExternal(isMacPrompt
+            ? 'https://existential.audio/blackhole/'
+            : 'https://vb-audio.com/Cable/index.htm'
+          )
         }
       }, 2000)
     }
