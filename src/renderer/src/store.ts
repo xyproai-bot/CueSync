@@ -242,9 +242,7 @@ export interface AppState {
   clearSetlist: () => void
   undoClearSetlist: () => void
   sortSetlist: (mode: SortMode) => void
-  updateSetlistPath: (index: number, newPath: string) => void
   batchUpdateSetlistPaths: (updates: Array<{ index: number; newPath: string }>) => void
-  setRightTab: (tab: 'devices' | 'setlist') => void
   setLang: (lang: 'en' | 'zh') => void
 
   // Project actions
@@ -475,13 +473,6 @@ export const useStore = create<AppState>()(persist((set) => ({
     }
     return { setlist: sorted, activeSetlistIndex, presetDirty: true }
   }),
-  updateSetlistPath: (index, newPath) => set((s) => {
-    if (index < 0 || index >= s.setlist.length) return s
-    const setlist = [...s.setlist]
-    const newName = newPath.split(/[/\\]/).pop() ?? setlist[index].name
-    setlist[index] = { ...setlist[index], path: newPath, name: newName }
-    return { setlist, presetDirty: true }
-  }),
   batchUpdateSetlistPaths: (updates: Array<{ index: number; newPath: string }>) => set((s) => {
     const setlist = [...s.setlist]
     for (const { index, newPath } of updates) {
@@ -491,7 +482,6 @@ export const useStore = create<AppState>()(persist((set) => ({
     }
     return { setlist, presetDirty: true }
   }),
-  setRightTab: (rightTab) => set({ rightTab, presetDirty: true }),
   setLang: (lang) => set({ lang, presetDirty: true }),
 
   newPreset: () => {
