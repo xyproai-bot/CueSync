@@ -85,8 +85,7 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
     const items = files
       .filter(f => audioExts.some(ext => f.name.toLowerCase().endsWith(ext)))
       .map(f => ({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        path: (f as any).path as string,
+        path: window.api.getPathForFile(f),
         name: f.name
       }))
     if (items.length > 0) addToSetlist(items)
