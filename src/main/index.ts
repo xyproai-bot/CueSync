@@ -911,7 +911,17 @@ app.whenReady().then(() => {
   })
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      const newWin = createWindow()
+      buildMenu(newWin, presetsDir)
+      // Deliver any file that was opened while the window was closed
+      newWin.webContents.on('did-finish-load', () => {
+        if (pendingOpenFile) {
+          newWin.webContents.send('open-cuesync-file', pendingOpenFile)
+          pendingOpenFile = null
+        }
+      })
+    }
   })
 })
 
