@@ -135,10 +135,16 @@ export function Waveform({ musicData, ltcData, onSeek, onVideoOffsetChange, onCl
   // ═══════════════════════════════════════════════════════════════════════════
 
   const drawLtc = useCallback((canvas: HTMLCanvasElement, data: Float32Array): void => {
+    const dpr = window.devicePixelRatio || 1
+    const cssW = canvas.clientWidth
+    const cssH = canvas.clientHeight
+    if (!cssW || !cssH) return
+    canvas.width = cssW * dpr
+    canvas.height = cssH * dpr
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const W = canvas.width, H = canvas.height
-    if (!W || !H) return
+    ctx.scale(dpr, dpr)
+    const W = cssW, H = cssH
     const ct = currentTimeRef.current, dur = durationRef.current
 
     ctx.clearRect(0, 0, W, H)
@@ -205,11 +211,8 @@ export function Waveform({ musicData, ltcData, onSeek, onVideoOffsetChange, onCl
   useEffect(() => {
     const el = ltcWrapRef.current
     if (!el) return
-    const obs = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const w = Math.floor(entry.contentRect.width)
-        if (w > 0 && ltcCanvasRef.current) { ltcCanvasRef.current.width = w; redrawLtc() }
-      }
+    const obs = new ResizeObserver(() => {
+      if (ltcCanvasRef.current) redrawLtc()
     })
     obs.observe(el)
     return () => obs.disconnect()
