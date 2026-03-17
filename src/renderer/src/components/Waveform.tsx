@@ -116,7 +116,7 @@ export function Waveform({ musicData, ltcData, onSeek, onVideoOffsetChange, onCl
     const el = musicContainerRef.current
     if (!el) return
     const onWheel = (e: WheelEvent): void => {
-      if (!e.ctrlKey) return
+      if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
       const ws = wsRef.current
       if (!ws) return
