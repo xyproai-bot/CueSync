@@ -567,7 +567,7 @@ export const useStore = create<AppState>()(persist((set) => ({
         const presets = await loadPresetsFromDisk()
         set({ savedPresets: presets, presetName: name, presetPath: chosenPath, presetDirty: false })
       }
-    } catch (e) { console.error('Save preset failed:', e); toast.error(t(useStore.getState().lang, 'autoSaveFailed')) }
+    } catch (e) { console.error('Save preset failed:', e); toast.error(t(useStore.getState().lang, 'saveFailed')) }
   },
 
   savePresetAs: async () => {
@@ -582,7 +582,7 @@ export const useStore = create<AppState>()(persist((set) => ({
       window.api.addRecentFile(chosenPath, name)
       const presets = await loadPresetsFromDisk()
       set({ savedPresets: presets, presetName: name, presetPath: chosenPath, presetDirty: false })
-    } catch (e) { console.error('Save preset failed:', e); toast.error(t(useStore.getState().lang, 'autoSaveFailed')) }
+    } catch (e) { console.error('Save preset failed:', e); toast.error(t(useStore.getState().lang, 'saveFailed')) }
   },
 
   openProject: async () => {
@@ -644,7 +644,7 @@ export const useStore = create<AppState>()(persist((set) => ({
 
   addRecentFile: (path: string, name: string) => {
     if (!path) return
-    window.api.addRecentFile(path, name)
+    window.api.addRecentFile(path, name).catch(() => {})
     set((s) => {
       const filtered = s.recentFiles.filter(f => f.path !== path)
       const recentFiles = [{ path, name }, ...filtered].slice(0, 10)
@@ -694,7 +694,7 @@ export const useStore = create<AppState>()(persist((set) => ({
       loopA: null, loopB: null, previousSetlist: null,
       musicOutputDeviceId: 'default', ltcOutputDeviceId: 'default',
       ltcGain: 1.0, selectedMidiPort: null, forceFps: null,
-      ltcChannel: 'auto', setlist: [],
+      ltcChannel: 'auto', setlist: [], activeSetlistIndex: null,
       presetName: null, presetPath: null, presetDirty: false
     })
   },
