@@ -260,7 +260,9 @@ function loadRecentFiles(): Array<{ path: string; name: string }> {
 }
 
 function saveRecentFiles(files: Array<{ path: string; name: string }>): void {
-  writeFileSync(recentFilesPath, JSON.stringify(files.slice(0, 10)), 'utf-8')
+  try {
+    writeFileSync(recentFilesPath, JSON.stringify(files.slice(0, 10)), 'utf-8')
+  } catch { /* ignore — recent files list is non-critical */ }
 }
 
 function addToRecentFiles(filePath: string, name: string): void {
