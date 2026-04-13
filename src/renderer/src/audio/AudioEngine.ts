@@ -89,6 +89,11 @@ export class AudioEngine {
   private musicOutputDeviceId = 'default'
   private ltcOutputDeviceId = 'default'   // 'default' = muted
   private ltcGainValue = 1.0
+
+  /** Returns 0 when no LTC device is selected, so audio never leaks to default output */
+  private _effectiveLtcGain(): number {
+    return (!this.ltcOutputDeviceId || this.ltcOutputDeviceId === 'default') ? 0 : this.ltcGainValue
+  }
   private playing = false
   /** Monotonically increasing counter to guard against play/seek race conditions */
   private playId = 0
@@ -278,7 +283,7 @@ export class AudioEngine {
   setLtcGain(value: number): void {
     this.ltcGainValue = Math.max(0, Math.min(LTC_GAIN_MAX, value))
     if (this.ltcGainNode && this.ltcCtx) {
-      this.ltcGainNode.gain.setTargetAtTime(this.ltcGainValue, this.ltcCtx.currentTime, 0.01)
+      this.ltcGainNode.gain.setTargetAtTime(this._effectiveLtcGain(), this.ltcCtx.currentTime, 0.01)
     }
   }
 
@@ -609,11 +614,12 @@ export class AudioEngine {
 
     // Pause/resume: no mute. Seek: brief 50ms mute.
     const isResume = Math.abs(offset - this.ltcLastStopOffset) < 0.5
+    const effectiveGain = this._effectiveLtcGain()
     if (isResume) {
-      this.ltcGainNode.gain.value = this.ltcGainValue
+      this.ltcGainNode.gain.value = effectiveGain
     } else {
       this.ltcGainNode.gain.setValueAtTime(0, this.ltcCtx.currentTime)
-      this.ltcGainNode.gain.setValueAtTime(this.ltcGainValue, when + 0.05)
+      this.ltcGainNode.gain.setValueAtTime(effectiveGain, when + 0.05)
     }
 
     this.ltcSource.start(when, offset)
@@ -646,11 +652,12 @@ export class AudioEngine {
 
       const when = this.ltcCtx.currentTime + SCHEDULING_DELAY
       const isResume = Math.abs(offset - this.ltcLastStopOffset) < 0.5
+      const effectiveGain = this._effectiveLtcGain()
       if (isResume) {
-        this.ltcGainNode.gain.value = this.ltcGainValue
+        this.ltcGainNode.gain.value = effectiveGain
       } else {
         this.ltcGainNode.gain.setValueAtTime(0, this.ltcCtx.currentTime)
-        this.ltcGainNode.gain.setValueAtTime(this.ltcGainValue, when + 0.05)
+        this.ltcGainNode.gain.setValueAtTime(effectiveGain, when + 0.05)
       }
 
       this.ltcEncoderNode.connect(this.ltcGainNode)

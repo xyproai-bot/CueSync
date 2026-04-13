@@ -396,7 +396,7 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#1a1a1a',
     // hiddenInset on Mac: hides the native title bar chrome but keeps the
     // traffic light buttons inset into the content area (no double-header)
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1093,6 +1093,14 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('get-app-version', () => app.getVersion())
+
+  // ── Window controls (custom title bar) ──
+  ipcMain.handle('window:minimize', () => { BrowserWindow.getFocusedWindow()?.minimize() })
+  ipcMain.handle('window:maximize', () => {
+    const w = BrowserWindow.getFocusedWindow()
+    if (w?.isMaximized()) w.unmaximize(); else w?.maximize()
+  })
+  ipcMain.handle('window:close', () => { BrowserWindow.getFocusedWindow()?.close() })
 
   // ── Art-Net Timecode IPC ──
   ipcMain.handle('artnet-start', () => {
