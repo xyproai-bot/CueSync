@@ -116,6 +116,32 @@ export function LicenseDialog({ onClose }: Props): React.JSX.Element {
         {error && <div className="license-error">{error}</div>}
         {success && <div className="license-success">{success}</div>}
 
+        {/* Pricing cards */}
+        {licenseStatus !== 'valid' && (
+          <div className="license-pricing">
+            <a
+              className="license-plan"
+              href="https://ltcast.lemonsqueezy.com/checkout/buy/001f3f48-747b-4649-801f-c0063a8b7afd"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <div className="license-plan-name">ANNUAL</div>
+              <div className="license-plan-price">$49<span className="license-plan-per">/year</span></div>
+              <div className="license-plan-note">Billed yearly</div>
+            </a>
+            <a
+              className="license-plan license-plan--highlight"
+              href="https://ltcast.lemonsqueezy.com/checkout/buy/001f3f48-747b-4649-801f-c0063a8b7afd"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <div className="license-plan-name">LIFETIME</div>
+              <div className="license-plan-price">$149</div>
+              <div className="license-plan-note">Pay once, use forever</div>
+            </a>
+          </div>
+        )}
+
         <div className="license-footer">
           <a
             href="https://ltcast.lemonsqueezy.com/checkout/buy/001f3f48-747b-4649-801f-c0063a8b7afd"
@@ -123,8 +149,9 @@ export function LicenseDialog({ onClose }: Props): React.JSX.Element {
             rel="noopener noreferrer"
             className="license-buy-link"
           >
-            {t(lang, 'licenseBuyPro')}
+            {t(lang, 'licenseBuyPro')} →
           </a>
+          <div className="license-powered">Powered by LemonSqueezy</div>
         </div>
       </div>
     </div>

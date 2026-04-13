@@ -96,6 +96,11 @@ contextBridge.exposeInMainWorld('api', {
     return () => { ipcRenderer.removeListener('artnet-socket-failed', handler) }
   },
 
+  // Window controls (custom title bar)
+  windowMinimize: () => ipcRenderer.invoke('window:minimize'),
+  windowMaximize: () => ipcRenderer.invoke('window:maximize'),
+  windowClose: () => ipcRenderer.invoke('window:close'),
+
   // Platform detection (for platform-specific UI text)
   platform: process.platform
 })
