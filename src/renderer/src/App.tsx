@@ -125,11 +125,18 @@ export default function App(): React.JSX.Element {
         if (result.valid) {
           s.setLicenseStatus('valid')
           s.setLicenseValidatedAt(Date.now())
-        } else if (s.licenseValidatedAt) {
+        } else {
+          // Server explicitly returned invalid — expire immediately.
+          // Grace period only applies to network failures (catch block).
+          s.setLicenseStatus('expired')
+        }
+      }).catch(() => {
+        // Network failure — use 30-day offline grace period
+        if (s.licenseValidatedAt) {
           const daysSince = (Date.now() - s.licenseValidatedAt) / (1000 * 60 * 60 * 24)
           if (daysSince > 30) s.setLicenseStatus('expired')
         }
-      }).catch(() => {})
+      })
 
       // 2. Also check our Worker for refunds/cancellations (webhook-driven)
       window.api.licenseStatus(s.licenseKey).then((result: { status: string }) => {
