@@ -955,7 +955,7 @@ export default function App(): React.JSX.Element {
     try {
       const arrayBuffer = await window.api.readAudioFile(filePath_)
       if (!arrayBuffer) throw new Error('Empty file')
-      await engine.current?.loadFile(arrayBuffer)
+      await engine.current?.loadFile(arrayBuffer, filePath_)
 
       // Reset BPM on new file load (real-time detection happens during playback)
       setDetectedBpm(null)
@@ -974,6 +974,16 @@ export default function App(): React.JSX.Element {
       const s = useStore.getState()
       const songIndex = s.activeSetlistIndex ?? 0
       osc.current?.sendSong(name, songIndex)
+
+      // Pre-cache next song in setlist for gapless transition
+      if (s.activeSetlistIndex !== null && s.activeSetlistIndex < s.setlist.length - 1) {
+        const nextItem = s.setlist[s.activeSetlistIndex + 1]
+        if (nextItem?.path) {
+          window.api.readAudioFile(nextItem.path)
+            .then((buf: ArrayBuffer) => engine.current?.preloadNextFile(buf, nextItem.path))
+            .catch(() => {}) // pre-cache failure is non-critical
+        }
+      }
     } catch (e) {
       setFilePath(null, null, 0)  // clear stale file state so UI doesn't show old file as loaded
       toast.error(`${t(useStore.getState().lang, 'loadFailed')}: ${e}`)

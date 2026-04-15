@@ -73,6 +73,8 @@ export class AudioEngine {
 
   // ── Shared state ─────────────────────────────────────────
   private buffer: AudioBuffer | null = null
+  private nextBuffer: AudioBuffer | null = null  // pre-cached next song for gapless transition
+  private nextBufferPath: string | null = null
   private startTime = 0
   private startOffset = 0
   private callbacks: AudioEngineCallbacks
@@ -154,16 +156,43 @@ export class AudioEngine {
   // File loading
   // ════════════════════════════════════════════════════════════
 
-  async loadFile(arrayBuffer: ArrayBuffer): Promise<void> {
+  /**
+   * Pre-decode the next song in background for gapless transition.
+   * Call this while the current song is playing.
+   */
+  async preloadNextFile(arrayBuffer: ArrayBuffer, filePath: string): Promise<void> {
+    const decodeCtx = new AudioContext()
+    try {
+      this.nextBuffer = await decodeCtx.decodeAudioData(arrayBuffer)
+      this.nextBufferPath = filePath
+    } catch {
+      this.nextBuffer = null
+      this.nextBufferPath = null
+    } finally {
+      await decodeCtx.close()
+    }
+  }
+
+  async loadFile(arrayBuffer: ArrayBuffer, filePath?: string): Promise<void> {
     await this.dispose()
     this.startOffset = 0
     this.callbacks.onTimeUpdate(0)
 
-    const decodeCtx = new AudioContext()
-    try {
-      this.buffer = await decodeCtx.decodeAudioData(arrayBuffer)
-    } finally {
-      await decodeCtx.close()
+    // Use pre-cached buffer if it matches the requested file
+    if (filePath && this.nextBuffer && this.nextBufferPath === filePath) {
+      this.buffer = this.nextBuffer
+      this.nextBuffer = null
+      this.nextBufferPath = null
+    } else {
+      const decodeCtx = new AudioContext()
+      try {
+        this.buffer = await decodeCtx.decodeAudioData(arrayBuffer)
+      } finally {
+        await decodeCtx.close()
+      }
+      // Clear stale pre-cache
+      this.nextBuffer = null
+      this.nextBufferPath = null
     }
 
     // Auto-detect LTC channel
