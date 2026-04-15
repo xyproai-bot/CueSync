@@ -405,6 +405,80 @@ function closeOscSocket(): void {
 }
 
 // ════════════════════════════════════════════════════════════
+// OSC Input — UDP listener for remote control from lighting consoles
+// ════════════════════════════════════════════════════════════
+
+let oscInputSocket: dgram.Socket | null = null
+
+/** Parse a minimal OSC message: extract address string and first argument. */
+function parseOscMessage(buf: Buffer): { address: string; args: (number | string)[] } | null {
+  try {
+    // Address string (null-terminated, padded to 4 bytes)
+    let i = 0
+    const addrEnd = buf.indexOf(0, i)
+    if (addrEnd < 0) return null
+    const address = buf.toString('ascii', i, addrEnd)
+    i = addrEnd + 1
+    i = Math.ceil(i / 4) * 4 // pad to 4-byte boundary
+
+    // Type tag string
+    if (i >= buf.length || buf[i] !== 0x2C) return { address, args: [] } // ',' = 0x2C
+    const tagEnd = buf.indexOf(0, i)
+    if (tagEnd < 0) return { address, args: [] }
+    const tags = buf.toString('ascii', i + 1, tagEnd) // skip the ','
+    i = tagEnd + 1
+    i = Math.ceil(i / 4) * 4
+
+    const args: (number | string)[] = []
+    for (const t of tags) {
+      if (t === 'i' && i + 4 <= buf.length) {
+        args.push(buf.readInt32BE(i)); i += 4
+      } else if (t === 'f' && i + 4 <= buf.length) {
+        args.push(buf.readFloatBE(i)); i += 4
+      } else if (t === 's') {
+        const se = buf.indexOf(0, i)
+        if (se < 0) break
+        args.push(buf.toString('ascii', i, se))
+        i = Math.ceil((se + 1) / 4) * 4
+      }
+    }
+    return { address, args }
+  } catch { return null }
+}
+
+function startOscInput(port: number, win: BrowserWindow): void {
+  stopOscInput()
+  oscInputSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
+  oscInputSocket.on('message', (msg) => {
+    const osc = parseOscMessage(msg)
+    if (!osc) return
+    // Forward OSC commands to renderer as IPC
+    // Supported addresses: /ltcast/play, /ltcast/pause, /ltcast/stop,
+    //   /ltcast/next, /ltcast/prev, /ltcast/goto (int arg: index)
+    const addr = osc.address.toLowerCase()
+    if (addr === '/ltcast/play') win.webContents.send('osc-input', 'play')
+    else if (addr === '/ltcast/pause') win.webContents.send('osc-input', 'pause')
+    else if (addr === '/ltcast/stop') win.webContents.send('osc-input', 'stop')
+    else if (addr === '/ltcast/play-pause' || addr === '/ltcast/playpause') win.webContents.send('osc-input', 'play-pause')
+    else if (addr === '/ltcast/next') win.webContents.send('osc-input', 'next')
+    else if (addr === '/ltcast/prev') win.webContents.send('osc-input', 'prev')
+    else if (addr === '/ltcast/goto' && typeof osc.args[0] === 'number') win.webContents.send('osc-input', 'goto', osc.args[0])
+  })
+  oscInputSocket.on('error', (err) => {
+    console.error('OSC Input socket error:', err)
+    stopOscInput()
+  })
+  oscInputSocket.bind(port)
+}
+
+function stopOscInput(): void {
+  if (oscInputSocket) {
+    try { oscInputSocket.close() } catch { /**/ }
+    oscInputSocket = null
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 // Art-Net Timecode — UDP sender on port 6454
 // ════════════════════════════════════════════════════════════
 
@@ -1254,6 +1328,17 @@ app.whenReady().then(() => {
 
   ipcMain.handle('osc-stop', () => {
     closeOscSocket()
+    return true
+  })
+
+  // OSC Input (remote control listener)
+  ipcMain.handle('osc-input-start', (_event, port: number) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) startOscInput(port || 9000, win)
+    return true
+  })
+  ipcMain.handle('osc-input-stop', () => {
+    stopOscInput()
     return true
   })
 

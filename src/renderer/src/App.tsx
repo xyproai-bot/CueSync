@@ -208,6 +208,38 @@ export default function App(): React.JSX.Element {
     return unsub
   }, [])
 
+  // OSC Input: listen for remote control commands from lighting consoles
+  useEffect(() => {
+    const cleanup = window.api.onOscInput((action: string, arg?: number) => {
+      const s = useStore.getState()
+      if (action === 'play' || action === 'play-pause') {
+        if (s.playState === 'playing') {
+          engine.current?.pause(); s.setPlayState('paused')
+        } else if (s.duration > 0) {
+          s.setPlayState('playing')
+          engine.current?.play().catch(() => s.setPlayState('paused'))
+        }
+      } else if (action === 'pause') {
+        engine.current?.pause(); s.setPlayState('paused')
+      } else if (action === 'stop') {
+        engine.current?.pause(); engine.current?.seek(0)
+        s.setPlayState('stopped'); s.setTimecode(null)
+      } else if (action === 'next') {
+        if (s.setlist.length > 0 && s.activeSetlistIndex !== null) {
+          const ni = Math.min(s.activeSetlistIndex + 1, s.setlist.length - 1)
+          if (ni !== s.activeSetlistIndex) s.setActiveSetlistIndex(ni)
+        }
+      } else if (action === 'prev') {
+        if (s.setlist.length > 0 && s.activeSetlistIndex !== null && s.activeSetlistIndex > 0) {
+          s.setActiveSetlistIndex(s.activeSetlistIndex - 1)
+        }
+      } else if (action === 'goto' && typeof arg === 'number') {
+        if (arg >= 0 && arg < s.setlist.length) s.setActiveSetlistIndex(arg)
+      }
+    })
+    return cleanup
+  }, [])
+
   // Init engine + MIDI once
   useEffect(() => {
     engine.current = new AudioEngine({

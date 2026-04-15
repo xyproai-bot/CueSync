@@ -77,6 +77,15 @@ contextBridge.exposeInMainWorld('api', {
   oscSendSong: (name: string, index: number, targetIp: string, port: number) =>
     ipcRenderer.send('osc-send-song', name, index, targetIp, port),
 
+  // OSC Input (remote control)
+  oscInputStart: (port: number) => ipcRenderer.invoke('osc-input-start', port),
+  oscInputStop: () => ipcRenderer.invoke('osc-input-stop'),
+  onOscInput: (callback: (action: string, arg?: number) => void) => {
+    const handler = (_event: unknown, action: string, arg?: number): void => callback(action, arg)
+    ipcRenderer.on('osc-input', handler)
+    return () => { ipcRenderer.removeListener('osc-input', handler) }
+  },
+
   // Show Log
   showlogStart: (showName: string) => ipcRenderer.invoke('showlog-start', showName),
   showlogEvent: (eventType: string, song: string, details: string) =>
