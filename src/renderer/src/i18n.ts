@@ -260,7 +260,17 @@ export const strings = {
     tcCalcTitle: 'TC Calculator',
     tcCalcDuration: 'Duration',
     tcCalcFrames: 'Frames',
-    tabCalc: 'Calc'
+    tabCalc: 'Calc',
+    // Pre-Show Check
+    preShowTitle: 'Pre-Show Check',
+    preShowAllGood: 'All systems GO',
+    preShowIssues: 'Issues found — check before show',
+    preShowWarnings: 'Warnings — review before show',
+    checkFile: 'Audio File',
+    checkNoFile: 'No file loaded',
+    checkSetlist: 'Setlist Files',
+    checkSongsOk: 'songs OK',
+    checkFilesMissing: 'files missing'
   },
   zh: {
     appTitle: 'LTCast',
@@ -521,7 +531,16 @@ export const strings = {
     tcCalcTitle: 'TC 計算機',
     tcCalcDuration: '時長',
     tcCalcFrames: '幀數',
-    tabCalc: '計算'
+    tabCalc: '計算',
+    preShowTitle: '演出前檢查',
+    preShowAllGood: '全部就緒',
+    preShowIssues: '發現問題 — 請確認',
+    preShowWarnings: '有警告 — 建議確認',
+    checkFile: '音訊檔案',
+    checkNoFile: '未載入檔案',
+    checkSetlist: 'Setlist 檔案',
+    checkSongsOk: '首 OK',
+    checkFilesMissing: '個檔案遺失'
   },
   ja: {
     appTitle: 'LTCast',
@@ -782,7 +801,16 @@ export const strings = {
     tcCalcTitle: 'TC 計算機',
     tcCalcDuration: '長さ',
     tcCalcFrames: 'フレーム',
-    tabCalc: '計算'
+    tabCalc: '計算',
+    preShowTitle: 'プリショーチェック',
+    preShowAllGood: '全システム準備完了',
+    preShowIssues: '問題あり — 確認してください',
+    preShowWarnings: '警告あり — 確認推奨',
+    checkFile: 'オーディオファイル',
+    checkNoFile: 'ファイル未読込',
+    checkSetlist: 'セットリスト',
+    checkSongsOk: '曲 OK',
+    checkFilesMissing: 'ファイル不明'
   }
 }
 

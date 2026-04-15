@@ -668,11 +668,24 @@ export default function App(): React.JSX.Element {
         if (e.code !== 'Space' && e.code !== 'Escape' && e.code !== 'F11') return
       }
 
-      // Space: play/pause
+      // Space: GO (standby → load+play) or play/pause toggle
       if (e.code === 'Space') {
         e.preventDefault()
         cancelAutoAdvance()
         const state = useStore.getState()
+
+        // Standby/GO: if a song is on standby, load and play it
+        if (state.standbySetlistIndex !== null && state.playState !== 'playing') {
+          const idx = state.standbySetlistIndex
+          const item = state.setlist[idx]
+          if (item) {
+            state.setStandbySetlistIndex(null)
+            state.setActiveSetlistIndex(idx)
+            openFile(item.path, item.offsetFrames)
+          }
+          return
+        }
+
         if (!state.duration) return
         if (state.playState === 'playing') {
           engine.current?.pause()

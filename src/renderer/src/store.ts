@@ -322,6 +322,7 @@ export interface AppState {
   // Setlist
   setlist: SetlistItem[]
   activeSetlistIndex: number | null
+  standbySetlistIndex: number | null  // cued but not yet loaded (Standby/GO workflow)
   previousSetlist: { setlist: SetlistItem[]; activeIndex: number | null } | null
   autoAdvance: boolean
   autoAdvanceGap: number  // seconds, 0–30
@@ -408,6 +409,7 @@ export interface AppState {
   addToSetlist: (items: Array<Omit<SetlistItem, 'id'> & { id?: string }>) => void
   removeFromSetlist: (index: number) => void
   setActiveSetlistIndex: (index: number | null) => void
+  setStandbySetlistIndex: (index: number | null) => void
   reorderSetlist: (from: number, to: number) => void
   clearSetlist: () => void
   undoClearSetlist: () => void
@@ -523,6 +525,7 @@ export const useStore = create<AppState>()(persist((set) => ({
 
   setlist: [],
   activeSetlistIndex: null,
+  standbySetlistIndex: null,
   previousSetlist: null,
   autoAdvance: false,
   autoAdvanceGap: 2,
@@ -647,6 +650,7 @@ export const useStore = create<AppState>()(persist((set) => ({
     return { setlist, activeSetlistIndex, presetDirty: true }
   }),
   setActiveSetlistIndex: (activeSetlistIndex) => set({ activeSetlistIndex }),
+  setStandbySetlistIndex: (standbySetlistIndex) => set({ standbySetlistIndex }),
   reorderSetlist: (from, to) => set((s) => {
     if (from < 0 || from >= s.setlist.length || to < 0 || to >= s.setlist.length) return s
     if (from === to) return s

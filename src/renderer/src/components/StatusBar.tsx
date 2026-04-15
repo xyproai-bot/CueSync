@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store'
 import { t } from '../i18n'
+import { PreShowCheck } from './PreShowCheck'
 
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
 const mod = isMac ? '⌘' : 'Ctrl'
@@ -29,6 +30,7 @@ interface Props {
 export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: Props): React.JSX.Element {
   const { lang, setLang, midiConnected, ltcSignalOk, artnetEnabled, oscEnabled, playState, tcGeneratorMode, setRightTab, showLocked, setShowLocked, ultraDark, setUltraDark } = useStore()
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showPreShow, setShowPreShow] = useState(false)
 
   const goDevices = (): void => setRightTab('devices')
 
@@ -90,6 +92,7 @@ export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: 
 
         <span style={{ flex: 1 }} />
 
+        <button className="btn-sm" onClick={() => setShowPreShow(true)} title={t(lang, 'preShowTitle')}>CHECK</button>
         <button
           className={`btn-sm${ultraDark ? ' btn-sm--active' : ''}`}
           onClick={() => setUltraDark(!ultraDark)}
@@ -132,6 +135,8 @@ export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: 
           </div>
         </div>
       )}
+
+      {showPreShow && <PreShowCheck onClose={() => setShowPreShow(false)} />}
     </>
   )
 }

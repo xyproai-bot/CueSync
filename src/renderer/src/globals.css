@@ -1491,6 +1491,12 @@ html, body, #root {
   background: #1e1e1e;
   border-left-color: #00d4ff;
 }
+.setlist-item.standby {
+  background: #1a1a0a;
+  border-left-color: #ffaa00;
+}
+.setlist-item.standby .setlist-index { color: #ffaa00; }
+.setlist-item.standby .setlist-name { color: #ffaa00; }
 .setlist-item.missing { opacity: 0.6; }
 .setlist-item.missing .setlist-name { color: #ff8800; font-style: italic; }
 
@@ -2978,6 +2984,22 @@ html, body, #root {
 }
 .trial-buy-link { color: #00d4ff; text-decoration: none; font-size: 11px; }
 .trial-buy-link:hover { text-decoration: underline; }
+
+/* ── Pre-Show Check ──────────────────────────────────────── */
+.preshow-table { width: 100%; border-collapse: collapse; }
+.preshow-table td { padding: 5px 6px; font-size: 12px; }
+.preshow-table tr { border-bottom: 1px solid #222; }
+.preshow-table tr:last-child { border-bottom: none; }
+.preshow-status { width: 20px; text-align: center; font-weight: 700; }
+.preshow-status--ok { color: #00c853; }
+.preshow-status--warn { color: #ffaa00; }
+.preshow-status--fail { color: #ff4444; }
+.preshow-label { color: #ccc; font-weight: 600; }
+.preshow-detail { color: #888; text-align: right; }
+.preshow-verdict { text-align: center; padding: 8px; border-radius: 4px; font-weight: 700; font-size: 13px; margin-top: 10px; }
+.preshow-verdict--ok { background: rgba(0, 200, 83, 0.1); color: #00c853; }
+.preshow-verdict--warn { background: rgba(255, 170, 0, 0.1); color: #ffaa00; }
+.preshow-verdict--fail { background: rgba(255, 68, 68, 0.1); color: #ff4444; }
 
 /* ── TC Calculator Panel ──────────────────────────────────── */
 .tc-calc-panel { padding: 12px; }

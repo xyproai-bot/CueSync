@@ -186,16 +186,26 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
     }
   }, [setlist, missingPaths, lang])
 
+  const { setStandbySetlistIndex, standbySetlistIndex } = useStore()
+
+  // Single click = standby (cue up), double-click = immediate load
   const handleItemClick = useCallback((index: number): void => {
-    if (editingOffsetIdx === index) return  // Don't load while editing offset
+    if (editingOffsetIdx === index) return
     const item = setlist[index]
     if (missingPaths.has(item.path)) {
       handleRelink(index)
       return
     }
+    setStandbySetlistIndex(index)
+  }, [setlist, missingPaths, setStandbySetlistIndex, handleRelink, editingOffsetIdx])
+
+  const handleItemDoubleClick = useCallback((index: number): void => {
+    const item = setlist[index]
+    if (missingPaths.has(item.path)) return
+    setStandbySetlistIndex(null)
     setActiveSetlistIndex(index)
     onLoadFile(item.path, item.offsetFrames)
-  }, [setlist, missingPaths, setActiveSetlistIndex, onLoadFile, handleRelink, editingOffsetIdx])
+  }, [setlist, missingPaths, setStandbySetlistIndex, setActiveSetlistIndex, onLoadFile])
 
   const handleToggleOffsetEdit = useCallback((e: React.MouseEvent, index: number): void => {
     e.stopPropagation()
@@ -487,12 +497,13 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
               return (
                 <div key={item.id} className="setlist-item-wrap">
                   <div
-                    className={`setlist-item${i === activeSetlistIndex ? ' active' : ''}${isMissing ? ' missing' : ''}${isEditingOffset ? ' offset-open' : ''}`}
+                    className={`setlist-item${i === activeSetlistIndex ? ' active' : ''}${i === standbySetlistIndex ? ' standby' : ''}${isMissing ? ' missing' : ''}${isEditingOffset ? ' offset-open' : ''}`}
                     draggable={!isEditingOffset}
                     onDragStart={(e) => handleDragStart(e, i)}
                     onDragOver={(e) => handleDragOver(e, i)}
                     onDragEnd={handleDragEnd}
                     onClick={() => handleItemClick(i)}
+                    onDoubleClick={() => handleItemDoubleClick(i)}
                     title={isMissing ? t(lang, 'fileMissing') : item.name}
                   >
                     <span className="setlist-index">{i + 1}</span>
