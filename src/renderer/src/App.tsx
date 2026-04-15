@@ -210,83 +210,47 @@ export default function App(): React.JSX.Element {
     return unsub
   }, [])
 
-  // OSC Input: listen for remote control commands from lighting consoles
-  useEffect(() => {
+  // #9: Shared remote command handler for OSC Input + WebSocket (Stream Deck / Remote Display)
+  const handleRemoteCommand = useCallback((action: string, index?: number) => {
+    const s = useStore.getState()
     const loadSetlistItem = (idx: number): void => {
-      const s = useStore.getState()
       const item = s.setlist[idx]
       if (!item) return
       s.setActiveSetlistIndex(idx)
       openFileRef.current?.(item.path, item.offsetFrames)
     }
-    const cleanup = window.api.onOscInput((action: string, arg?: number) => {
-      const s = useStore.getState()
-      if (action === 'play' || action === 'play-pause') {
-        if (s.playState === 'playing') {
-          engine.current?.pause(); s.setPlayState('paused')
-        } else if (s.duration > 0) {
-          s.setPlayState('playing')
-          engine.current?.play().catch(() => s.setPlayState('paused'))
-        }
-      } else if (action === 'pause') {
+    if (action === 'play' || action === 'play-pause') {
+      if (s.playState === 'playing') {
         engine.current?.pause(); s.setPlayState('paused')
-      } else if (action === 'stop') {
-        engine.current?.pause(); engine.current?.seek(0)
-        s.setPlayState('stopped'); s.setTimecode(null)
-      } else if (action === 'next') {
-        if (s.setlist.length > 0 && s.activeSetlistIndex !== null) {
-          const ni = Math.min(s.activeSetlistIndex + 1, s.setlist.length - 1)
-          if (ni !== s.activeSetlistIndex) loadSetlistItem(ni)
-        }
-      } else if (action === 'prev') {
-        if (s.setlist.length > 0 && s.activeSetlistIndex !== null && s.activeSetlistIndex > 0) {
-          loadSetlistItem(s.activeSetlistIndex - 1)
-        }
-      } else if (action === 'goto' && typeof arg === 'number') {
-        if (arg >= 0 && arg < s.setlist.length) loadSetlistItem(arg)
+      } else if (s.duration > 0) {
+        s.setPlayState('playing')
+        engine.current?.play().catch(() => s.setPlayState('paused'))
       }
-    })
-    return cleanup
+    } else if (action === 'pause') {
+      engine.current?.pause(); s.setPlayState('paused')
+    } else if (action === 'stop') {
+      engine.current?.pause(); engine.current?.seek(0)
+      s.setPlayState('stopped'); s.setTimecode(null)
+    } else if (action === 'next') {
+      if (s.setlist.length > 0 && s.activeSetlistIndex !== null) {
+        const ni = Math.min(s.activeSetlistIndex + 1, s.setlist.length - 1)
+        if (ni !== s.activeSetlistIndex) loadSetlistItem(ni)
+      }
+    } else if (action === 'prev') {
+      if (s.setlist.length > 0 && s.activeSetlistIndex !== null && s.activeSetlistIndex > 0) {
+        loadSetlistItem(s.activeSetlistIndex - 1)
+      }
+    } else if (action === 'goto' && typeof index === 'number') {
+      if (index >= 0 && index < s.setlist.length) loadSetlistItem(index)
+    }
   }, [])
 
-  // Remote Display / Stream Deck: listen for WebSocket commands
+  // OSC Input + Remote Display: both use the shared handler
   useEffect(() => {
-    const loadSetlistItem = (idx: number): void => {
-      const s = useStore.getState()
-      const item = s.setlist[idx]
-      if (!item) return
-      s.setActiveSetlistIndex(idx)
-      openFileRef.current?.(item.path, item.offsetFrames)
-    }
-    const cleanup = window.api.onRemoteAction((action: string, index?: number) => {
-      const s = useStore.getState()
-      if (action === 'play' || action === 'play-pause') {
-        if (s.playState === 'playing') {
-          engine.current?.pause(); s.setPlayState('paused')
-        } else if (s.duration > 0) {
-          s.setPlayState('playing')
-          engine.current?.play().catch(() => s.setPlayState('paused'))
-        }
-      } else if (action === 'pause') {
-        engine.current?.pause(); s.setPlayState('paused')
-      } else if (action === 'stop') {
-        engine.current?.pause(); engine.current?.seek(0)
-        s.setPlayState('stopped'); s.setTimecode(null)
-      } else if (action === 'next') {
-        if (s.setlist.length > 0 && s.activeSetlistIndex !== null) {
-          const ni = Math.min(s.activeSetlistIndex + 1, s.setlist.length - 1)
-          if (ni !== s.activeSetlistIndex) loadSetlistItem(ni)
-        }
-      } else if (action === 'prev') {
-        if (s.setlist.length > 0 && s.activeSetlistIndex !== null && s.activeSetlistIndex > 0) {
-          loadSetlistItem(s.activeSetlistIndex - 1)
-        }
-      } else if (action === 'goto' && typeof index === 'number') {
-        if (index >= 0 && index < s.setlist.length) loadSetlistItem(index)
-      }
-    })
-    return cleanup
-  }, [])
+    const c1 = window.api.onOscInput((action, arg) => handleRemoteCommand(action, arg))
+    const c2 = window.api.onRemoteAction((action, index) => handleRemoteCommand(action, index))
+    return () => { c1(); c2() }
+  }, [handleRemoteCommand])
 
   // Remote Display: broadcast state changes to WebSocket clients
   useEffect(() => {

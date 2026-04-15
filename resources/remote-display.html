@@ -97,15 +97,28 @@ let reconnectTimer = null
 function connect() {
   const host = location.hostname || 'localhost'
   const port = location.port || '3100'
+  // Get PIN from URL query parameter
+  const params = new URLSearchParams(location.search)
+  const pin = params.get('pin') || ''
   ws = new WebSocket(`ws://${host}:${port}`)
 
   ws.onopen = () => {
-    document.getElementById('disconnected').style.display = 'none'
+    // Send PIN for WebSocket authentication
+    ws.send(JSON.stringify({ pin }))
   }
 
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data)
+      if (msg.type === 'auth') {
+        if (msg.ok) {
+          document.getElementById('disconnected').style.display = 'none'
+        } else {
+          document.getElementById('disconnected').textContent = 'Invalid PIN'
+          ws.close()
+        }
+        return
+      }
       if (msg.type === 'tc') {
         const el = document.getElementById('tc')
         el.textContent = msg.value
@@ -124,6 +137,7 @@ function connect() {
 
   ws.onclose = () => {
     document.getElementById('disconnected').style.display = 'flex'
+    if (reconnectTimer) clearTimeout(reconnectTimer)
     reconnectTimer = setTimeout(connect, 2000)
   }
 

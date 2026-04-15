@@ -414,16 +414,31 @@ import http from 'http'
 const WS_PORT = 3100
 let wsServer: http.Server | null = null
 let wss: InstanceType<typeof WebSocketServer> | null = null
+let wsPin: string | null = null  // authentication PIN for WebSocket clients
+let wsActualPort = WS_PORT
+
+/** Generate a 4-digit PIN for WebSocket authentication */
+function generateWsPin(): string {
+  return String(Math.floor(1000 + Math.random() * 9000))
+}
 
 function startRemoteServer(win: BrowserWindow): void {
   if (wsServer) return
+  wsPin = generateWsPin()
 
   // HTTP server serves the remote display HTML page
   wsServer = http.createServer((req, res) => {
-    if (req.url === '/' || req.url === '/index.html') {
-      const htmlPath = join(app.isPackaged
+    const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      // Require PIN as query parameter: http://IP:3100/?pin=1234
+      if (url.searchParams.get('pin') !== wsPin) {
+        res.writeHead(403, { 'Content-Type': 'text/html' })
+        res.end('<h2>Access Denied</h2><p>Add ?pin=XXXX to the URL. Check LTCast for the PIN.</p>')
+        return
+      }
+      const htmlPath = app.isPackaged
         ? join(process.resourcesPath, 'resources', 'remote-display.html')
-        : join(__dirname, '../../resources/remote-display.html'))
+        : join(__dirname, '../../resources/remote-display.html')
       try {
         const html = readFileSync(htmlPath, 'utf-8')
         res.writeHead(200, { 'Content-Type': 'text/html' })
@@ -440,29 +455,58 @@ function startRemoteServer(win: BrowserWindow): void {
 
   wss = new WebSocketServer({ server: wsServer })
 
+  const authenticatedClients = new WeakSet<WsWebSocket>()
+
   wss.on('connection', (ws) => {
-    console.log('[Remote] Client connected')
+    console.log('[Remote] Client connected (awaiting auth)')
 
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data.toString())
+
+        // First message must be auth: { "pin": "1234" }
+        if (!authenticatedClients.has(ws)) {
+          if (msg.pin === wsPin) {
+            authenticatedClients.add(ws)
+            ws.send(JSON.stringify({ type: 'auth', ok: true }))
+            console.log('[Remote] Client authenticated')
+          } else {
+            ws.send(JSON.stringify({ type: 'auth', ok: false }))
+            ws.close()
+          }
+          return
+        }
+
         if (msg.action) {
-          // Forward Stream Deck / remote commands to renderer
           win.webContents.send('remote-action', msg.action, msg.index)
         }
       } catch { /* ignore malformed */ }
     })
 
+    // Auto-disconnect unauthenticated clients after 5 seconds
+    setTimeout(() => {
+      if (!authenticatedClients.has(ws)) {
+        ws.close()
+      }
+    }, 5000)
+
     ws.on('error', () => {})
   })
 
-  wsServer.listen(WS_PORT, () => {
-    console.log(`[Remote] Server listening on http://0.0.0.0:${WS_PORT}`)
+  wsServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      wsActualPort = WS_PORT + 1
+      console.warn(`[Remote] Port ${WS_PORT} in use, retrying on ${wsActualPort}...`)
+      wsServer?.listen(wsActualPort)
+    } else {
+      console.error('[Remote] Server error:', err)
+      stopRemoteServer()
+    }
   })
 
-  wsServer.on('error', (err) => {
-    console.error('[Remote] Server error:', err)
-    stopRemoteServer()
+  wsActualPort = WS_PORT
+  wsServer.listen(WS_PORT, () => {
+    console.log(`[Remote] Server listening on http://0.0.0.0:${wsActualPort}`)
   })
 }
 
@@ -913,8 +957,7 @@ app.whenReady().then(() => {
   // Only in production — dev builds can't use the updater
   setTimeout(() => checkForUpdates(true), 5000)
 
-  // Auto-start Remote Display server (WebSocket + HTTP on port 3100)
-  startRemoteServer(win)
+  // Remote Display server is started on demand via IPC (not auto-started)
 
   // IPC: get LTCast base path
   ipcMain.handle('get-ltcast-path', () => ltcastDir)
@@ -1325,6 +1368,14 @@ app.whenReady().then(() => {
 
   ipcMain.handle('showlog-start', (_event, showName: string) => {
     try {
+      // #6: close previous stream if still open
+      if (showLogStream) {
+        try {
+          showLogStream.write(`${new Date().toISOString()},show_end,,replaced_by_new\n`)
+          showLogStream.end()
+        } catch { /**/ }
+        showLogStream = null
+      }
       const logsDir = join(app.getPath('userData'), 'logs')
       if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true })
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
@@ -1333,8 +1384,10 @@ app.whenReady().then(() => {
       showLogPath = join(logsDir, `${date}_${time}_${safeName}.csv`)
       const { createWriteStream } = require('fs')
       showLogStream = createWriteStream(showLogPath, { flags: 'a' })
+      // #7: escape showName for CSV
+      const esc = (s: string): string => s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
       showLogStream.write('Timestamp,Event,Song,Details\n')
-      showLogStream.write(`${new Date().toISOString()},show_start,${showName},\n`)
+      showLogStream.write(`${new Date().toISOString()},show_start,${esc(showName)},\n`)
       return showLogPath
     } catch { return null }
   })
@@ -1427,7 +1480,7 @@ app.whenReady().then(() => {
   ipcMain.handle('remote-start', () => {
     const win = BrowserWindow.getAllWindows()[0]
     if (win) startRemoteServer(win)
-    return WS_PORT
+    return { port: wsActualPort, pin: wsPin }
   })
   ipcMain.handle('remote-stop', () => {
     stopRemoteServer()
@@ -1579,7 +1632,16 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   closeArtnetSocket()
+  closeOscSocket()      // #8: was missing
   stopRemoteServer()
   stopOscInput()
+  // #5: close show log stream on quit
+  if (showLogStream) {
+    try {
+      showLogStream.write(`${new Date().toISOString()},show_end,,app_quit\n`)
+      showLogStream.end()
+    } catch { /**/ }
+    showLogStream = null
+  }
   if (process.platform !== 'darwin') app.quit()
 })

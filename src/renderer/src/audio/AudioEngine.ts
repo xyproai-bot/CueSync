@@ -75,6 +75,7 @@ export class AudioEngine {
   private buffer: AudioBuffer | null = null
   private nextBuffer: AudioBuffer | null = null  // pre-cached next song for gapless transition
   private nextBufferPath: string | null = null
+  private preloadId = 0  // #10: cancellation counter for stale preloads
   private startTime = 0
   private startOffset = 0
   private callbacks: AudioEngineCallbacks
@@ -161,13 +162,24 @@ export class AudioEngine {
    * Call this while the current song is playing.
    */
   async preloadNextFile(arrayBuffer: ArrayBuffer, filePath: string): Promise<void> {
+    // #10: increment counter — stale completions check this and bail
+    const myId = ++this.preloadId
+    // #14: clear previous nextBuffer before starting new decode
+    this.nextBuffer = null
+    this.nextBufferPath = null
     const decodeCtx = new AudioContext()
     try {
-      this.nextBuffer = await decodeCtx.decodeAudioData(arrayBuffer)
-      this.nextBufferPath = filePath
+      const buf = await decodeCtx.decodeAudioData(arrayBuffer)
+      // #10: only store if this is still the latest preload request
+      if (this.preloadId === myId) {
+        this.nextBuffer = buf
+        this.nextBufferPath = filePath
+      }
     } catch {
-      this.nextBuffer = null
-      this.nextBufferPath = null
+      if (this.preloadId === myId) {
+        this.nextBuffer = null
+        this.nextBufferPath = null
+      }
     } finally {
       await decodeCtx.close()
     }
@@ -433,6 +445,9 @@ export class AudioEngine {
     this._stopPlayback()
     await this._closeLtcCtx()
     this.buffer = null
+    this.nextBuffer = null      // #15: prevent memory leak
+    this.nextBufferPath = null
+    this.preloadId++            // cancel any in-flight preload
   }
 
   /**
@@ -468,6 +483,9 @@ export class AudioEngine {
     if (this.ltcCtx) { try { this.ltcCtx.close() } catch { /**/ } this.ltcCtx = null }
     this.ltcWorkletReady = false
     this.ltcEncoderReady = false
+    this.nextBuffer = null      // #15: prevent memory leak
+    this.nextBufferPath = null
+    this.preloadId++
   }
 
   /**
