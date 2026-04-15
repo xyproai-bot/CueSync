@@ -17,6 +17,7 @@ const SHORTCUTS: Array<{ key: string; label: (lang: 'en' | 'zh' | 'ja') => strin
   { key: `${mod}+Z`,        label: (l) => t(l, 'scCtrlZ') },
   { key: `${mod}+←`,        label: (l) => t(l, 'scCtrlLeft') },
   { key: `${mod}+→`,        label: (l) => t(l, 'scCtrlRight') },
+  { key: '1-9',              label: (l) => t(l, 'scNumKeys') },
 ]
 
 interface Props {
@@ -26,7 +27,7 @@ interface Props {
 }
 
 export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: Props): React.JSX.Element {
-  const { lang, setLang, midiConnected, ltcSignalOk, artnetEnabled, oscEnabled, playState, tcGeneratorMode, setRightTab, showLocked, setShowLocked } = useStore()
+  const { lang, setLang, midiConnected, ltcSignalOk, artnetEnabled, oscEnabled, playState, tcGeneratorMode, setRightTab, showLocked, setShowLocked, ultraDark, setUltraDark } = useStore()
   const [showShortcuts, setShowShortcuts] = useState(false)
 
   const goDevices = (): void => setRightTab('devices')
@@ -89,6 +90,17 @@ export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: 
 
         <span style={{ flex: 1 }} />
 
+        <button
+          className={`btn-sm${ultraDark ? ' btn-sm--active' : ''}`}
+          onClick={() => {
+            const next = !ultraDark
+            setUltraDark(next)
+            document.body.classList.toggle('ultra-dark', next)
+          }}
+          title="Ultra-dark mode"
+        >
+          {ultraDark ? 'DARK' : 'dark'}
+        </button>
         <button className="btn-sm" onClick={() => setShowShortcuts(true)} title={t(lang, 'shortcutsTitle')}>?</button>
         <button className="btn-sm" onClick={onToggleFullscreen}>{t(lang, 'fullscreen')}</button>
         <button

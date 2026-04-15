@@ -6,6 +6,7 @@ function pad2(n: number): string { return String(Math.floor(n)).padStart(2, '0')
 
 interface Props {
   fullscreen?: boolean
+  onSeekToTimecode?: (tc: string) => void
 }
 
 const FPS_OPTIONS = [24, 25, 29.97, 30]
@@ -21,7 +22,7 @@ function formatCountdown(remaining: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-export function TimecodeDisplay({ fullscreen }: Props): React.JSX.Element {
+export function TimecodeDisplay({ fullscreen, onSeekToTimecode }: Props): React.JSX.Element {
   const {
     timecode, detectedFps, forceFps, setForceFps, lang,
     tcGeneratorMode, setTcGeneratorMode,
@@ -31,6 +32,34 @@ export function TimecodeDisplay({ fullscreen }: Props): React.JSX.Element {
     currentTime, duration,
     ltcStartTime
   } = useStore()
+
+  // Toggle elapsed vs remaining time (click to switch, like Arena)
+  const [showElapsed, setShowElapsed] = useState(false)
+
+  // Inline TC edit: double-click timecode to type a target TC and seek
+  const [tcEditing, setTcEditing] = useState(false)
+  const [tcEditValue, setTcEditValue] = useState('')
+  const tcEditRef = useRef<HTMLInputElement>(null)
+
+  const handleTcDoubleClick = (): void => {
+    if (!duration || !onSeekToTimecode) return
+    const current = timecode
+      ? `${pad2(timecode.hours)}:${pad2(timecode.minutes)}:${pad2(timecode.seconds)}:${pad2(timecode.frames)}`
+      : '00:00:00:00'
+    setTcEditValue(current)
+    setTcEditing(true)
+  }
+
+  useEffect(() => {
+    if (tcEditing && tcEditRef.current) tcEditRef.current.select()
+  }, [tcEditing])
+
+  const commitTcEdit = (): void => {
+    setTcEditing(false)
+    const fps = forceFps ?? detectedFps ?? generatorFps
+    const parsed = parseAndValidateTC(tcEditValue, fps)
+    if (parsed && onSeekToTimecode) onSeekToTimecode(parsed)
+  }
 
   // LTC signal lost: playing in reader mode but no signal
   const signalLost = !tcGeneratorMode && playState === 'playing' && !ltcSignalOk
@@ -52,24 +81,48 @@ export function TimecodeDisplay({ fullscreen }: Props): React.JSX.Element {
   return (
     <div className={`tc-display${fullscreen ? ' tc-display--fullscreen' : ''}${signalLost ? ' tc-signal-lost' : ''}`}>
       <div className="tc-label">{t(lang, 'timecode')}</div>
-      <div className="tc-digits">
-        <span className="tc-seg">{h}</span>
-        <span className="tc-colon">:</span>
-        <span className="tc-seg">{m}</span>
-        <span className="tc-colon">:</span>
-        <span className="tc-seg">{s}</span>
-        <span className="tc-colon">{sep}</span>
-        <span className="tc-seg tc-frames">{f}</span>
-      </div>
+      {tcEditing ? (
+        <div className="tc-digits">
+          <input
+            ref={tcEditRef}
+            className="tc-edit-input"
+            value={tcEditValue}
+            onChange={(e) => setTcEditValue(e.target.value)}
+            onBlur={commitTcEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTcEdit()
+              if (e.key === 'Escape') setTcEditing(false)
+            }}
+            placeholder="HH:MM:SS:FF"
+            spellCheck={false}
+          />
+        </div>
+      ) : (
+        <div className="tc-digits" onDoubleClick={handleTcDoubleClick} style={{ cursor: duration ? 'pointer' : undefined }}>
+          <span className="tc-seg">{h}</span>
+          <span className="tc-colon">:</span>
+          <span className="tc-seg">{m}</span>
+          <span className="tc-colon">:</span>
+          <span className="tc-seg">{s}</span>
+          <span className="tc-colon">{sep}</span>
+          <span className="tc-seg tc-frames">{f}</span>
+        </div>
+      )}
       <div className="tc-fps">{fpsLabel}</div>
 
-      {/* Countdown timer */}
+      {/* Elapsed / Remaining timer (click to toggle) */}
       {duration > 0 ? (() => {
         const remaining = Math.max(0, duration - currentTime)
+        const elapsed = Math.max(0, currentTime)
+        const displayTime = showElapsed ? elapsed : remaining
         const isWarning = remaining <= 30
         return (
-          <div className={`tc-countdown${isWarning ? ' tc-countdown--warn' : ''}`}>
-            -{formatCountdown(remaining)}
+          <div
+            className={`tc-countdown${isWarning ? ' tc-countdown--warn' : ''}`}
+            onClick={() => setShowElapsed(prev => !prev)}
+            title={showElapsed ? 'Elapsed (click for remaining)' : 'Remaining (click for elapsed)'}
+          >
+            {showElapsed ? '' : '-'}{formatCountdown(displayTime)}
           </div>
         )
       })() : (

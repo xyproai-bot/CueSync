@@ -40,6 +40,7 @@ export function DevicePanel({ onMidiPortChange, onMusicDeviceChange, onLtcDevice
     oscEnabled, setOscEnabled,
     oscTargetIp, setOscTargetIp,
     oscTargetPort, setOscTargetPort,
+    oscTemplate, setOscTemplate,
     midiClockEnabled, setMidiClockEnabled,
     midiClockSource, setMidiClockSource,
     midiClockManualBpm, setMidiClockManualBpm,
@@ -344,6 +345,22 @@ export function DevicePanel({ onMidiPortChange, onMusicDeviceChange, onLtcDevice
               }}
               style={{ width: '70px' }}
             />
+          </div>
+        )}
+        {oscEnabled && (
+          <div className="artnet-ip-row">
+            <span className="artnet-ip-label">{t(lang, 'oscTemplate')}</span>
+            <select
+              className="device-select"
+              value={oscTemplate}
+              onChange={(e) => setOscTemplate(e.target.value as 'generic' | 'resolume' | 'disguise' | 'watchout')}
+              style={{ width: 'auto', minWidth: '110px' }}
+            >
+              <option value="generic">Generic (/timecode)</option>
+              <option value="resolume">Resolume Arena</option>
+              <option value="disguise">Disguise (d3)</option>
+              <option value="watchout">WATCHOUT</option>
+            </select>
           </div>
         )}
       </div>

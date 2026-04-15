@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.send('osc-send-transport', state, targetIp, port),
   oscSendSong: (name: string, index: number, targetIp: string, port: number) =>
     ipcRenderer.send('osc-send-song', name, index, targetIp, port),
+  oscSendTcCustom: (address: string, tcString: string, fps: number, targetIp: string, port: number) =>
+    ipcRenderer.send('osc-send-tc-custom', address, tcString, fps, targetIp, port),
 
   // Menu command listeners
   onMenuCommand: (channel: string, callback: (...args: unknown[]) => void) => {

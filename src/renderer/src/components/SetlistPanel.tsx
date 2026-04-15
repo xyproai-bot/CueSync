@@ -3,6 +3,7 @@ import { useStore, SortMode } from '../store'
 import { framesToTc, tcToString } from '../audio/timecodeConvert'
 import { t } from '../i18n'
 import { toast } from './Toast'
+import { exportCueSheetPdf } from '../utils/exportCueSheet'
 import { Tooltip } from './Tooltip'
 
 interface Props {
@@ -295,6 +296,21 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
     }
   }, [setlist, lang])
 
+  const handleExportPdf = useCallback(async (): Promise<void> => {
+    if (setlist.length === 0) return
+    const s = useStore.getState()
+    const fps = s.forceFps ?? s.detectedFps ?? 25
+    const pdfBytes = exportCueSheetPdf({
+      presetName: s.presetName || 'Untitled',
+      setlist,
+      markers: s.markers,
+      fps
+    })
+    const defaultName = `${s.presetName || 'cuesheet'}.pdf`
+    const savedPath = await window.api.saveWavDialog(pdfBytes.buffer as ArrayBuffer, defaultName)
+    if (savedPath) toast.success('PDF exported')
+  }, [setlist])
+
   const handleImportCsv = useCallback(async (): Promise<void> => {
     try {
       const csvContent = await window.api.openCsvDialog()
@@ -419,6 +435,12 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
             title={t(lang, 'exportCsv')}
             disabled={setlist.length === 0}
           >↑</button>
+          <button
+            className="setlist-hdr-btn"
+            onClick={handleExportPdf}
+            title="Export PDF Cue Sheet"
+            disabled={setlist.length === 0}
+          >PDF</button>
           <button
             className="setlist-hdr-btn"
             onClick={handleImportCsv}

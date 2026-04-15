@@ -11,6 +11,7 @@ import { DevicePanel } from './components/DevicePanel'
 import { SetlistPanel } from './components/SetlistPanel'
 import { MidiCuePanel } from './components/MidiCuePanel'
 import { StructurePanel } from './components/StructurePanel'
+import { TcCalcPanel } from './components/TcCalcPanel'
 import { PresetBar } from './components/PresetBar'
 import { TapBpm } from './components/TapBpm'
 import { StatusBar } from './components/StatusBar'
@@ -98,6 +99,13 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     document.title = presetName ? `LTCast - ${presetName}` : 'LTCast'
   }, [presetName])
+
+  // Restore ultra-dark mode on mount
+  useEffect(() => {
+    if (useStore.getState().ultraDark) {
+      document.body.classList.add('ultra-dark')
+    }
+  }, [])
 
   // Handle .ltcast file opened via double-click / OS association
   useEffect(() => {
@@ -773,6 +781,18 @@ export default function App(): React.JSX.Element {
           }
         }
       }
+      // Number keys 1-9: quick jump to setlist song
+      if (e.code >= 'Digit1' && e.code <= 'Digit9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const state = useStore.getState()
+        if (state.setlist.length === 0) return
+        const idx = parseInt(e.code.charAt(5)) - 1 // Digit1 → 0, Digit9 → 8
+        if (idx < state.setlist.length) {
+          e.preventDefault()
+          state.setActiveSetlistIndex(idx)
+          const item = state.setlist[idx]
+          openFile(item.path, item.offsetFrames)
+        }
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -1304,7 +1324,13 @@ export default function App(): React.JSX.Element {
             </div>
           </div>
 
-          <TimecodeDisplay />
+          <TimecodeDisplay onSeekToTimecode={(tcStr) => {
+            const s = useStore.getState()
+            const fps = s.forceFps ?? s.detectedFps ?? s.generatorFps
+            const targetFrames = tcToFrames(tcStr, fps)
+            const targetSec = targetFrames / fps
+            handleSeek(targetSec)
+          }} />
 
           {audioLoading ? (
             <div className="file-info file-info--loading">
@@ -1376,6 +1402,10 @@ export default function App(): React.JSX.Element {
               className={`right-tab-btn${rightTab === 'structure' ? ' active' : ''}`}
               onClick={() => useStore.getState().setRightTab('structure')}
             >{t(lang, 'structureTitle')}</button>
+            <button
+              className={`right-tab-btn${rightTab === 'calc' ? ' active' : ''}`}
+              onClick={() => useStore.getState().setRightTab('calc')}
+            >{t(lang, 'tabCalc')}</button>
           </div>
 
           {rightTab === 'devices' && (
@@ -1405,6 +1435,8 @@ export default function App(): React.JSX.Element {
               <StructurePanel onSeek={handleSeek} />
             </ProGate>
           )}
+
+          {rightTab === 'calc' && <TcCalcPanel />}
         </div>
       </div>
 

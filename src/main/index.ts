@@ -1220,6 +1220,14 @@ app.whenReady().then(() => {
     oscSocket.send(pkt, 0, pkt.length, port, ip)
   })
 
+  // Custom OSC: send timecode as string with custom address pattern
+  ipcMain.on('osc-send-tc-custom', (_event, address: string, tcString: string, fps: number, targetIp: string, port: number) => {
+    if (!oscSocket) return
+    const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
+    const pkt = oscMessage(address, 'sf', tcString, fps)
+    oscSocket.send(pkt, 0, pkt.length, port, ip)
+  })
+
   ipcMain.on('osc-send-transport', (_event, state: string, targetIp: string, port: number) => {
     if (!oscSocket) return
     const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'

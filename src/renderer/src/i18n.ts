@@ -177,6 +177,7 @@ export const strings = {
     oscTargetIp: 'Target IP',
     oscTargetPort: 'Port',
     oscStatus: 'OSC: Active',
+    oscTemplate: 'Format',
     // Sprint 4: Waveform Markers
     addMarker: 'Add Marker',
     deleteMarker: 'Delete Marker',
@@ -243,6 +244,7 @@ export const strings = {
     scCtrlZ: 'Undo',
     scCtrlLeft: 'Jump to Previous Marker',
     scCtrlRight: 'Jump to Next Marker',
+    scNumKeys: 'Jump to Song 1-9',
     // Promo code
     promoTitle: 'Have a promo code?',
     promoCodePlaceholder: 'Promo code',
@@ -253,7 +255,12 @@ export const strings = {
     promoInvalidEmail: 'Please enter a valid email',
     promoError: 'Redemption failed',
     licenseExpires: 'Expires',
-    licenseDaysLeft: 'days left'
+    licenseDaysLeft: 'days left',
+    // TC Calculator
+    tcCalcTitle: 'TC Calculator',
+    tcCalcDuration: 'Duration',
+    tcCalcFrames: 'Frames',
+    tabCalc: 'Calc'
   },
   zh: {
     appTitle: 'LTCast',
@@ -433,6 +440,7 @@ export const strings = {
     oscTargetIp: '目標 IP',
     oscTargetPort: '埠',
     oscStatus: 'OSC：啟用中',
+    oscTemplate: '格式',
     // Sprint 4: Waveform Markers
     addMarker: '新增標記',
     deleteMarker: '刪除標記',
@@ -497,6 +505,7 @@ export const strings = {
     scCtrlZ: '復原',
     scCtrlLeft: '跳到上一個標記',
     scCtrlRight: '跳到下一個標記',
+    scNumKeys: '跳到歌曲 1-9',
     // Promo code
     promoTitle: '有推廣碼？',
     promoCodePlaceholder: '推廣碼',
@@ -507,7 +516,12 @@ export const strings = {
     promoInvalidEmail: '請輸入有效的 Email',
     promoError: '兌換失敗',
     licenseExpires: '到期日',
-    licenseDaysLeft: '天'
+    licenseDaysLeft: '天',
+    // TC Calculator
+    tcCalcTitle: 'TC 計算機',
+    tcCalcDuration: '時長',
+    tcCalcFrames: '幀數',
+    tabCalc: '計算'
   },
   ja: {
     appTitle: 'LTCast',
@@ -687,6 +701,7 @@ export const strings = {
     oscTargetIp: '送信先 IP',
     oscTargetPort: 'ポート',
     oscStatus: 'OSC：有効',
+    oscTemplate: 'フォーマット',
     // Sprint 4: Waveform Markers
     addMarker: 'マーカーを追加',
     deleteMarker: 'マーカーを削除',
@@ -751,6 +766,7 @@ export const strings = {
     scCtrlZ: '元に戻す',
     scCtrlLeft: '前のマーカーへジャンプ',
     scCtrlRight: '次のマーカーへジャンプ',
+    scNumKeys: '曲 1-9 にジャンプ',
     // Promo code
     promoTitle: 'プロモコードをお持ちですか？',
     promoCodePlaceholder: 'プロモコード',
@@ -761,7 +777,12 @@ export const strings = {
     promoInvalidEmail: '有効なメールアドレスを入力してください',
     promoError: '引き換えに失敗しました',
     licenseExpires: '有効期限',
-    licenseDaysLeft: '日間'
+    licenseDaysLeft: '日間',
+    // TC Calculator
+    tcCalcTitle: 'TC 計算機',
+    tcCalcDuration: '長さ',
+    tcCalcFrames: 'フレーム',
+    tabCalc: '計算'
   }
 }
 
