@@ -530,6 +530,10 @@ function wsBroadcast(data: object): void {
 // OSC Input — UDP listener for remote control from lighting consoles
 // ════════════════════════════════════════════════════════════
 
+// Show Log — must be module-level so window-all-closed can access them
+let showLogStream: import('fs').WriteStream | null = null
+let showLogPath: string | null = null
+
 let oscInputSocket: dgram.Socket | null = null
 
 /** Parse a minimal OSC message: extract address string and first argument. */
@@ -1363,8 +1367,8 @@ app.whenReady().then(() => {
   ipcMain.handle('check-for-updates', () => checkForUpdates(false))
 
   // ── Show Log (CSV performance log) ──
-  let showLogStream: import('fs').WriteStream | null = null
-  let showLogPath: string | null = null
+  // NOTE: showLogStream & showLogPath are declared at module level (above)
+  // so they're accessible from window-all-closed cleanup handler
 
   ipcMain.handle('showlog-start', (_event, showName: string) => {
     try {
