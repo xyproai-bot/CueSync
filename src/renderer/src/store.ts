@@ -86,7 +86,7 @@ export interface WaveformMarker {
 
 export interface PresetData {
   lang: 'en' | 'zh' | 'ja'
-  rightTab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc'
+  rightTab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc' | 'log'
   offsetFrames: number
   loop: boolean
   loopA?: number | null
@@ -343,7 +343,7 @@ export interface AppState {
   waveformZoom: Record<string, number>
 
   // UI
-  rightTab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc'
+  rightTab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc' | 'log'
   lang: 'en' | 'zh' | 'ja'
   showLocked: boolean   // UI lock mode — prevents accidental changes during live shows
   ultraDark: boolean    // Ultra-dark high-contrast mode for dim environments
@@ -418,7 +418,7 @@ export interface AppState {
   setSetlistItemOffset: (index: number, offsetFrames: number | undefined) => void
   setSetlistItemNotes: (index: number, notes: string | undefined) => void
   setSetlistItemMidiCues: (index: number, cues: MidiCuePoint[]) => void
-  setRightTab: (tab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc') => void
+  setRightTab: (tab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc' | 'log') => void
   setLang: (lang: 'en' | 'zh' | 'ja') => void
   setShowLocked: (locked: boolean) => void
   setUltraDark: (dark: boolean) => void

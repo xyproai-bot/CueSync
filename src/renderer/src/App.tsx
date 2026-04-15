@@ -12,6 +12,7 @@ import { SetlistPanel } from './components/SetlistPanel'
 import { MidiCuePanel } from './components/MidiCuePanel'
 import { StructurePanel } from './components/StructurePanel'
 import { TcCalcPanel } from './components/TcCalcPanel'
+import { ShowLogPanel } from './components/ShowLogPanel'
 import { PresetBar } from './components/PresetBar'
 import { TapBpm } from './components/TapBpm'
 import { StatusBar } from './components/StatusBar'
@@ -25,6 +26,7 @@ import { tcToFrames } from './audio/timecodeConvert'
 import { detectBpmAt } from './audio/BpmDetector'
 import { t } from './i18n'
 import { toast } from './components/Toast'
+import { showLog } from './utils/showLog'
 import { LTC_CONFIDENCE_THRESHOLD } from './constants'
 
 export default function App(): React.JSX.Element {
@@ -840,6 +842,7 @@ export default function App(): React.JSX.Element {
           const cueFrames = tcToFrames(cue.triggerTimecode, tc.fps) + (cue.offsetFrames ?? 0)
           if (cueFrames <= currentFrames) {
             triggeredCueIds.current.add(cue.id)
+            showLog.log('cue', `${cue.messageType} ch${cue.channel} #${cue.data1}${cue.label ? ` "${cue.label}"` : ''} @ ${cue.triggerTimecode}`)
             // Visual feedback: flash the cue row
             setLastFiredCueId(cue.id)
             if (cueFlashTimer.current) clearTimeout(cueFlashTimer.current)
@@ -939,6 +942,7 @@ export default function App(): React.JSX.Element {
 
     const name = filePath_.split(/[/\\]/).pop() ?? filePath_
     setAudioLoading(true, name)
+    showLog.log('file', `Loading: ${name}`)
 
     try {
       const arrayBuffer = await window.api.readAudioFile(filePath_)
@@ -1139,6 +1143,7 @@ export default function App(): React.JSX.Element {
     cancelAutoAdvance()
     setPlayState('playing')
     osc.current?.sendTransport('play')
+    showLog.log('transport', 'Play')
     engine.current?.play().then(() => {
       const tc = useStore.getState().timecode
       if (tc) mtc.current?.sendFullFrame(tc)
@@ -1152,6 +1157,7 @@ export default function App(): React.JSX.Element {
     engine.current?.pause()
     setPlayState('paused')
     osc.current?.sendTransport('pause')
+    showLog.log('transport', 'Pause')
   }
 
   const handleStop = (): void => {
@@ -1162,9 +1168,11 @@ export default function App(): React.JSX.Element {
     setTimecode(null)
     triggeredCueIds.current = new Set()
     osc.current?.sendTransport('stop')
+    showLog.log('transport', 'Stop')
   }
 
   const handlePanic = (): void => {
+    showLog.log('transport', 'PANIC — all outputs stopped')
     // Stop playback
     handleStop()
     // Send MIDI All Notes Off on all 16 channels
@@ -1447,6 +1455,10 @@ export default function App(): React.JSX.Element {
               className={`right-tab-btn${rightTab === 'calc' ? ' active' : ''}`}
               onClick={() => useStore.getState().setRightTab('calc')}
             >{t(lang, 'tabCalc')}</button>
+            <button
+              className={`right-tab-btn${rightTab === 'log' ? ' active' : ''}`}
+              onClick={() => useStore.getState().setRightTab('log')}
+            >{t(lang, 'tabLog')}</button>
           </div>
 
           {rightTab === 'devices' && (
@@ -1479,6 +1491,8 @@ export default function App(): React.JSX.Element {
           )}
 
           {rightTab === 'calc' && <TcCalcPanel />}
+
+          {rightTab === 'log' && <ShowLogPanel />}
         </div>
       </div>
 

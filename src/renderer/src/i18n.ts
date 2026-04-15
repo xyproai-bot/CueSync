@@ -270,7 +270,10 @@ export const strings = {
     checkNoFile: 'No file loaded',
     checkSetlist: 'Setlist Files',
     checkSongsOk: 'songs OK',
-    checkFilesMissing: 'files missing'
+    checkFilesMissing: 'files missing',
+    showLogTitle: 'Show Log',
+    showLogEmpty: 'No events yet. Play something!',
+    tabLog: 'Log'
   },
   zh: {
     appTitle: 'LTCast',
@@ -540,7 +543,10 @@ export const strings = {
     checkNoFile: '未載入檔案',
     checkSetlist: 'Setlist 檔案',
     checkSongsOk: '首 OK',
-    checkFilesMissing: '個檔案遺失'
+    checkFilesMissing: '個檔案遺失',
+    showLogTitle: '演出記錄',
+    showLogEmpty: '尚無事件。開始播放吧！',
+    tabLog: '記錄'
   },
   ja: {
     appTitle: 'LTCast',
@@ -810,7 +816,10 @@ export const strings = {
     checkNoFile: 'ファイル未読込',
     checkSetlist: 'セットリスト',
     checkSongsOk: '曲 OK',
-    checkFilesMissing: 'ファイル不明'
+    checkFilesMissing: 'ファイル不明',
+    showLogTitle: 'ショーログ',
+    showLogEmpty: 'まだイベントがありません。再生してみましょう！',
+    tabLog: 'ログ'
   }
 }
 
