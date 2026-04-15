@@ -62,6 +62,8 @@ export default function App(): React.JSX.Element {
   // MIDI activity indicator
   const [midiActivity, setMidiActivity] = useState(false)
   const midiActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [lastFiredCueId, setLastFiredCueId] = useState<string | null>(null)
+  const cueFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Cancel any pending auto-advance countdown
   const cancelAutoAdvance = useCallback((): void => {
@@ -825,6 +827,10 @@ export default function App(): React.JSX.Element {
           const cueFrames = tcToFrames(cue.triggerTimecode, tc.fps) + (cue.offsetFrames ?? 0)
           if (cueFrames <= currentFrames) {
             triggeredCueIds.current.add(cue.id)
+            // Visual feedback: flash the cue row
+            setLastFiredCueId(cue.id)
+            if (cueFlashTimer.current) clearTimeout(cueFlashTimer.current)
+            cueFlashTimer.current = setTimeout(() => setLastFiredCueId(null), 500)
             // Fire the cue
             if (cue.messageType === 'program-change') {
               mtc.current?.sendProgramChange(cue.channel, cue.data1)
@@ -1145,6 +1151,24 @@ export default function App(): React.JSX.Element {
     osc.current?.sendTransport('stop')
   }
 
+  const handlePanic = (): void => {
+    // Stop playback
+    handleStop()
+    // Send MIDI All Notes Off on all 16 channels
+    if (mtc.current?.isConnected()) {
+      for (let ch = 0; ch < 16; ch++) {
+        mtc.current.sendControlChange(ch + 1, 123, 0) // CC 123 = All Notes Off
+        mtc.current.sendControlChange(ch + 1, 120, 0) // CC 120 = All Sound Off
+      }
+    }
+    // Stop MIDI Clock if running
+    if (mtc.current?.isClockRunning()) mtc.current.stopClock()
+    // Send zero timecode via Art-Net and OSC
+    const zeroTc = { hours: 0, minutes: 0, seconds: 0, frames: 0, fps: 25, dropFrame: false }
+    artnet.current?.sendTimecode(zeroTc)
+    osc.current?.sendTimecode(zeroTc)
+  }
+
   const handleSeek = async (time: number): Promise<void> => {
     const wasPlaying = await engine.current?.seek(time)
     if (wasPlaying) setPlayState('playing')
@@ -1374,6 +1398,7 @@ export default function App(): React.JSX.Element {
             onPause={handlePause}
             onStop={handleStop}
             onSeek={handleSeek}
+            onPanic={handlePanic}
           />
 
           {/* Auto-advance countdown banner */}
@@ -1429,6 +1454,7 @@ export default function App(): React.JSX.Element {
                 onMidiInputPortChange={selectMidiInputPort}
                 onStartLearn={handleStartLearn}
                 learningMappingId={learningMappingId}
+                lastFiredCueId={lastFiredCueId}
               />
             </ProGate>
           )}

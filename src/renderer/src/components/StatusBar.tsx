@@ -49,7 +49,7 @@ export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: 
           onClick={goDevices}
           title="LTC Signal"
         >
-          <span className={`status-dot${ltcSignalOk ? ' status-dot--ok' : ''}`} />
+          <span className={`status-dot${ltcSignalOk ? ' status-dot--ok' : ''}${ltcSignalOk && playState === 'playing' ? ' status-dot--pulse' : ''}`} />
           LTC
         </button>
         <button
@@ -57,7 +57,7 @@ export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: 
           onClick={goDevices}
           title="MIDI Timecode output"
         >
-          <span className={`status-dot${midiConnected ? ' status-dot--ok' : ''}`} />
+          <span className={`status-dot${midiConnected ? ' status-dot--ok' : ''}${midiConnected && playState === 'playing' ? ' status-dot--pulse' : ''}`} />
           MTC
         </button>
         <button
@@ -65,7 +65,7 @@ export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: 
           onClick={goDevices}
           title="Art-Net output"
         >
-          <span className={`status-dot${artnetEnabled ? ' status-dot--ok' : ''}`} />
+          <span className={`status-dot${artnetEnabled ? ' status-dot--ok' : ''}${artnetEnabled && playState === 'playing' ? ' status-dot--pulse' : ''}`} />
           Art-Net
         </button>
         <button
@@ -73,7 +73,7 @@ export function StatusBar({ version, onToggleFullscreen, onSwitchToGenerator }: 
           onClick={goDevices}
           title="OSC output"
         >
-          <span className={`status-dot${oscEnabled ? ' status-dot--ok' : ''}`} />
+          <span className={`status-dot${oscEnabled ? ' status-dot--ok' : ''}${oscEnabled && playState === 'playing' ? ' status-dot--pulse' : ''}`} />
           OSC
         </button>
 

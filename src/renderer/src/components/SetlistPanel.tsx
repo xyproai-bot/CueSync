@@ -11,6 +11,12 @@ interface Props {
   onImportFiles?: () => void
 }
 
+function formatDurShort(secs: number): string {
+  const m = Math.floor(secs / 60)
+  const s = Math.floor(secs % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.Element {
   const {
     setlist, activeSetlistIndex, lang,
@@ -21,6 +27,7 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
 
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [missingPaths, setMissingPaths] = useState<Set<string>>(new Set())
+  const [durations, setDurations] = useState<Record<string, number>>({})
   const [editingOffsetIdx, setEditingOffsetIdx] = useState<number | null>(null)
   const [editingOffsetStr, setEditingOffsetStr] = useState('')
   const [editingNotesIdx, setEditingNotesIdx] = useState<number | null>(null)
@@ -73,6 +80,17 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
     ).then(results => {
       if (cancelled) return
       setMissingPaths(new Set(results.filter(r => !r.exists).map(r => r.path)))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [setlist])
+
+  // Fetch durations for setlist items
+  useEffect(() => {
+    if (setlist.length === 0) { setDurations({}); return }
+    let cancelled = false
+    const paths = setlist.map(item => item.path)
+    window.api.getAudioDurations(paths).then(result => {
+      if (!cancelled) setDurations(result)
     }).catch(() => {})
     return () => { cancelled = true }
   }, [setlist])
@@ -487,6 +505,9 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
                       )}
                       {item.name}
                     </span>
+                    {durations[item.path] != null && (
+                      <span className="setlist-duration">{formatDurShort(durations[item.path])}</span>
+                    )}
                     {hasOffset && (
                       <span className="setlist-offset-badge" title={t(lang, 'songOffset')}>
                         {(item.offsetFrames ?? 0) >= 0 ? '+' : ''}{item.offsetFrames}f
@@ -631,6 +652,14 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
           </div>
 
           {/* Clear all at very bottom, red, with confirmation */}
+          {Object.keys(durations).length > 0 && (() => {
+            const total = setlist.reduce((sum, item) => sum + (durations[item.path] ?? 0), 0)
+            const h = Math.floor(total / 3600)
+            const m = Math.floor((total % 3600) / 60)
+            const s = Math.floor(total % 60)
+            const timeStr = h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
+            return <div className="setlist-total">{setlist.length} songs — {timeStr}</div>
+          })()}
           <button
             className="btn-setlist-clear-all"
             onClick={clearSetlist}

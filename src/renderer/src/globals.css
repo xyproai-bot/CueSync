@@ -508,6 +508,15 @@ html, body, #root {
   margin-top: 2px;
   white-space: nowrap;
 }
+.tc-next-song {
+  font-size: 13px;
+  font-weight: 600;
+  color: #00d4ff;
+  letter-spacing: 0.5px;
+  animation: tc-flash 1.5s ease-in-out infinite;
+  margin-top: 2px;
+}
+
 .tc-banner--hidden {
   visibility: hidden;
   pointer-events: none;
@@ -1066,6 +1075,8 @@ html, body, #root {
 .btn-transport:hover:not(:disabled) { background: #1e1e1e; }
 .btn-transport:active:not(:disabled) { transform: scale(0.9); }
 .btn-transport:disabled { opacity: 0.3; cursor: default; }
+.btn-panic { color: #ff4444 !important; font-weight: 900; font-size: 11px !important; letter-spacing: -1px; }
+.btn-panic:hover:not(:disabled) { background: rgba(255, 68, 68, 0.15) !important; }
 .btn-transport.active { background: rgba(0, 212, 255, 0.1); color: #00d4ff; }
 
 /* Play button — larger, round, filled */
@@ -1384,6 +1395,13 @@ html, body, #root {
   background: #00c853;
   box-shadow: 0 0 5px rgba(0, 200, 83, 0.7);
 }
+.status-dot--pulse {
+  animation: dot-pulse 1s ease-in-out infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(0, 200, 83, 0.7); }
+  50% { box-shadow: 0 0 10px rgba(0, 200, 83, 1), 0 0 2px rgba(0, 200, 83, 1); }
+}
 
 .btn-sm {
   background: #121212;
@@ -1531,6 +1549,22 @@ html, body, #root {
 .setlist-item:hover .setlist-offset-btn { opacity: 1; }
 .setlist-offset-btn:hover { color: #00d4ff; }
 .setlist-offset-btn.active { opacity: 1; color: #00d4ff; }
+
+.setlist-duration {
+  font-size: 9px;
+  color: #666;
+  font-family: 'JetBrains Mono', monospace;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+.setlist-total {
+  text-align: center;
+  font-size: 10px;
+  color: #666;
+  padding: 6px 0 2px;
+  border-top: 1px solid #1a1a1a;
+}
 
 /* Per-song offset badge (shown when offset is set) */
 .setlist-offset-badge {
@@ -2345,6 +2379,7 @@ html, body, #root {
 }
 .cp-cue-item:hover { background: rgba(255,255,255,0.03); }
 .cp-cue-item--off { opacity: 0.35; }
+.cp-cue-item--fired { background: rgba(0, 212, 255, 0.15); box-shadow: inset 0 0 0 1px #00d4ff; transition: background 0.15s; }
 
 /* Circular toggle for enable/disable */
 .cp-cue-toggle {

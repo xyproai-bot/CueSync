@@ -30,7 +30,8 @@ export function TimecodeDisplay({ fullscreen, onSeekToTimecode }: Props): React.
     generatorFps, setGeneratorFps,
     ltcSignalOk, playState,
     currentTime, duration,
-    ltcStartTime
+    ltcStartTime,
+    autoAdvance, setlist, activeSetlistIndex
   } = useStore()
 
   // Toggle elapsed vs remaining time (click to switch, like Arena)
@@ -51,7 +52,10 @@ export function TimecodeDisplay({ fullscreen, onSeekToTimecode }: Props): React.
   }
 
   useEffect(() => {
-    if (tcEditing && tcEditRef.current) tcEditRef.current.select()
+    if (tcEditing && tcEditRef.current) {
+      tcEditRef.current.focus()
+      tcEditRef.current.select()
+    }
   }, [tcEditing])
 
   const commitTcEdit = (): void => {
@@ -86,6 +90,7 @@ export function TimecodeDisplay({ fullscreen, onSeekToTimecode }: Props): React.
           <input
             ref={tcEditRef}
             className="tc-edit-input"
+            autoFocus
             value={tcEditValue}
             onChange={(e) => setTcEditValue(e.target.value)}
             onBlur={commitTcEdit}
@@ -128,6 +133,15 @@ export function TimecodeDisplay({ fullscreen, onSeekToTimecode }: Props): React.
       })() : (
         <div className="tc-countdown tc-countdown--empty">--:--</div>
       )}
+
+      {/* Next song indicator (auto-advance, last 15 seconds) */}
+      {(() => {
+        if (!autoAdvance || duration <= 0 || activeSetlistIndex === null) return null
+        const remaining = duration - currentTime
+        const nextIdx = activeSetlistIndex + 1
+        if (nextIdx >= setlist.length || remaining > 15 || remaining <= 0) return null
+        return <div className="tc-next-song">NEXT: {setlist[nextIdx].name}</div>
+      })()}
 
       <div className={`tc-signal-lost-banner${signalLost ? '' : ' tc-banner--hidden'}`}>
         {t(lang, 'ltcSignalLost')}
