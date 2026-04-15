@@ -342,13 +342,17 @@ export class AudioEngine {
 
     const startOffset = offset !== undefined ? offset : this.startOffset
 
-    // ── Music context ──
-    this.ctx = new AudioContext()
-    if (this.musicOutputDeviceId && this.musicOutputDeviceId !== 'default') {
-      try {
-        // @ts-expect-error - setSinkId newer API
-        await this.ctx.setSinkId(this.musicOutputDeviceId)
-      } catch { /**/ }
+    // ── Music context (reuse across play/pause to prevent AudioContext leak) ──
+    if (!this.ctx || this.ctx.state === 'closed') {
+      this.ctx = new AudioContext()
+      if (this.musicOutputDeviceId && this.musicOutputDeviceId !== 'default') {
+        try {
+          // @ts-expect-error - setSinkId newer API
+          await this.ctx.setSinkId(this.musicOutputDeviceId)
+        } catch { /**/ }
+      }
+    } else if (this.ctx.state === 'suspended') {
+      await this.ctx.resume()
     }
     if (this.playId !== thisPlayId) return
 
@@ -443,11 +447,13 @@ export class AudioEngine {
     // #15 fix: clear pending signal timeout before teardown to prevent stale callback
     if (this.ltcSignalTimeout) { clearTimeout(this.ltcSignalTimeout); this.ltcSignalTimeout = null }
     this._stopPlayback()
+    // Close music context on full dispose (not on play/pause)
+    if (this.ctx) { try { await this.ctx.close() } catch { /**/ } this.ctx = null }
     await this._closeLtcCtx()
     this.buffer = null
-    this.nextBuffer = null      // #15: prevent memory leak
+    this.nextBuffer = null
     this.nextBufferPath = null
-    this.preloadId++            // cancel any in-flight preload
+    this.preloadId++
   }
 
   /**
@@ -785,9 +791,8 @@ export class AudioEngine {
     if (this.ltcSignalTimeout) { clearTimeout(this.ltcSignalTimeout); this.ltcSignalTimeout = null }
     this.callbacks.onLtcSignalStatus(false)
 
-    // Stop music (clear onended first to prevent double-firing of onEnded callback)
+    // Stop music source (keep ctx alive for reuse — prevents AudioContext leak)
     if (this.musicSource) { this.musicSource.onended = null; try { this.musicSource.stop() } catch { /**/ } this.musicSource = null }
-    if (this.ctx) { try { this.ctx.close() } catch { /**/ } this.ctx = null }
 
     // Stop LTC source only — keep worklet + gain alive for instant resume
     this._stopLtcSource()

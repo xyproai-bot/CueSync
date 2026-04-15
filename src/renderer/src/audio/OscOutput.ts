@@ -55,7 +55,7 @@ export class OscOutput {
 
     window.api.oscSendTc(
       tc.hours, tc.minutes, tc.seconds, tc.frames,
-      Math.round(tc.fps), this.targetIp, this.targetPort
+      tc.fps, this.targetIp, this.targetPort
     )
   }
 

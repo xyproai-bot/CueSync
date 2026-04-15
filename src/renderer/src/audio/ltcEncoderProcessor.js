@@ -214,8 +214,14 @@ class LTCEncoderProcessor extends AudioWorkletProcessor {
     bits[57] = (Math.floor(h / 10) >> 1) & 1
 
     // Bit 58: Reserved (0)
-    // Bit 59: Biphase correction polarity (0)
     // Bits 60-63: User bits field 8 (0)
+
+    // Bit 27 + 59: Biphase Mark Phase Correction (SMPTE 12M-1 §6.2)
+    // Count '1' bits in data region (bits 0-63, excluding sync word).
+    // Set bit 27 to make total '1' count even (DC-balanced signal).
+    let oneCount = 0
+    for (let i = 0; i < 64; i++) oneCount += bits[i]
+    bits[27] = (oneCount & 1) === 1 ? 1 : 0  // flip if odd
 
     // Bits 64-79: Sync word 0011111111111101
     // (LSB first: bits[64]=0, bits[65]=0, bits[66]=1, ..., bits[78]=0, bits[79]=1)

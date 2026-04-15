@@ -231,10 +231,16 @@ async function verifyWebhookSignature(rawBody, signature, secret) {
     ['sign']
   )
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody))
-  const expected = Array.from(new Uint8Array(sig))
+  const expectedHex = Array.from(new Uint8Array(sig))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
-  return expected === signature
+  // C8: constant-time comparison to prevent timing oracle attacks
+  if (expectedHex.length !== signature.length) return false
+  const a = encoder.encode(expectedHex)
+  const b = encoder.encode(signature)
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i]
+  return diff === 0
 }
 
 /** Extract license key from various LemonSqueezy webhook payload shapes. */

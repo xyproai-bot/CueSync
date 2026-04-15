@@ -376,11 +376,18 @@ function oscInt32(val: number): Buffer {
   return buf
 }
 
+function oscFloat32(val: number): Buffer {
+  const buf = Buffer.alloc(4)
+  buf.writeFloatBE(val, 0)
+  return buf
+}
+
 function oscMessage(address: string, types: string, ...args: (number | string)[]): Buffer {
   const parts: Buffer[] = [oscString(address), oscString(',' + types)]
   for (let i = 0; i < args.length; i++) {
     const t = types[i]
     if (t === 'i') parts.push(oscInt32(args[i] as number))
+    else if (t === 'f') parts.push(oscFloat32(args[i] as number))
     else if (t === 's') parts.push(oscString(args[i] as string))
   }
   return Buffer.concat(parts)
@@ -416,6 +423,7 @@ let wsServer: http.Server | null = null
 let wss: InstanceType<typeof WebSocketServer> | null = null
 let wsPin: string | null = null  // authentication PIN for WebSocket clients
 let wsActualPort = WS_PORT
+const wsAuthenticatedClients = new WeakSet<WsWebSocket>()  // C1: track auth'd clients at module level
 
 /** Generate a 4-digit PIN for WebSocket authentication */
 function generateWsPin(): string {
@@ -455,7 +463,7 @@ function startRemoteServer(win: BrowserWindow): void {
 
   wss = new WebSocketServer({ server: wsServer })
 
-  const authenticatedClients = new WeakSet<WsWebSocket>()
+  // wsAuthenticatedClients is at module level (wsAuthenticatedClients)
 
   wss.on('connection', (ws) => {
     console.log('[Remote] Client connected (awaiting auth)')
@@ -465,9 +473,9 @@ function startRemoteServer(win: BrowserWindow): void {
         const msg = JSON.parse(data.toString())
 
         // First message must be auth: { "pin": "1234" }
-        if (!authenticatedClients.has(ws)) {
+        if (!wsAuthenticatedClients.has(ws)) {
           if (msg.pin === wsPin) {
-            authenticatedClients.add(ws)
+            wsAuthenticatedClients.add(ws)
             ws.send(JSON.stringify({ type: 'auth', ok: true }))
             console.log('[Remote] Client authenticated')
           } else {
@@ -485,7 +493,7 @@ function startRemoteServer(win: BrowserWindow): void {
 
     // Auto-disconnect unauthenticated clients after 5 seconds
     setTimeout(() => {
-      if (!authenticatedClients.has(ws)) {
+      if (!wsAuthenticatedClients.has(ws)) {
         ws.close()
       }
     }, 5000)
@@ -515,12 +523,12 @@ function stopRemoteServer(): void {
   if (wsServer) { try { wsServer.close() } catch { /**/ } wsServer = null }
 }
 
-/** Broadcast a message to all connected WebSocket clients */
+/** Broadcast a message to authenticated WebSocket clients only */
 function wsBroadcast(data: object): void {
   if (!wss) return
   const json = JSON.stringify(data)
   wss.clients.forEach((client) => {
-    if (client.readyState === WsWebSocket.OPEN) {
+    if (client.readyState === WsWebSocket.OPEN && wsAuthenticatedClients.has(client)) {
       client.send(json)
     }
   })
@@ -994,6 +1002,13 @@ app.whenReady().then(() => {
   // IPC: save preset to a specific path (used when path is already known)
   ipcMain.handle('save-preset', (_event, name: string, data: unknown, filePath?: string) => {
     const dest = filePath ?? join(presetsDir, name.replace(/[<>:"/\\|?*]/g, '_') + '.ltcast')
+    // C7: path traversal protection — only allow writes to presetsDir, projectsDir, or user-chosen paths
+    const resolvedDest = require('path').resolve(dest)
+    const resolvedPresets = require('path').resolve(presetsDir)
+    const resolvedProjects = require('path').resolve(join(presetsDir, '..', 'Projects'))
+    if (!resolvedDest.startsWith(resolvedPresets) && !resolvedDest.startsWith(resolvedProjects) && !resolvedDest.endsWith('.ltcast')) {
+      throw new Error('Invalid save path')
+    }
     const dir = dirname(dest)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     const content = JSON.stringify({ name, data, updatedAt: new Date().toISOString() }, null, 2)
@@ -1500,7 +1515,7 @@ app.whenReady().then(() => {
   ipcMain.on('osc-send-tc', (_event, hours: number, minutes: number, seconds: number, frames: number, fps: number, targetIp: string, port: number) => {
     if (!oscSocket) return
     const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
-    const pkt = oscMessage('/timecode', 'iiiii', hours, minutes, seconds, frames, fps)
+    const pkt = oscMessage('/timecode', 'iiiif', hours, minutes, seconds, frames, fps)
     oscSocket.send(pkt, 0, pkt.length, port, ip)
   })
 

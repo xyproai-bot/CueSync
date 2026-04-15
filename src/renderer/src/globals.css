@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+/* C3: No CDN fonts — offline shows must not depend on internet.
+   Use system font stack with Inter/JetBrains Mono as preferred if installed locally. */
 
 /* ── Scrollbar (thin, dark, auto-hide) ───────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -1784,33 +1785,27 @@ html, body, #root {
   50% { opacity: 0.5; }
 }
 
-/* When locked: disable entire panel areas.
-   Only transport play/pause/stop/seek and scrub bar remain usable. */
-.ui-locked .setlist-sidebar {
+/* UI Lock: block ALL mouse interaction except transport play/pause/stop/seek + status bar.
+   Uses blanket pointer-events:none on dangerous areas. */
+.ui-locked .setlist-sidebar,
+.ui-locked .right-panel,
+.ui-locked .transport-offset,
+.ui-locked .transport-loop,
+.ui-locked .tc-generator-controls,
+.ui-locked .title-bar-btn,
+.ui-locked .preset-bar,
+.ui-locked .tc-fps,
+.ui-locked .tc-gen-row,
+.ui-locked .waveform-container,
+.ui-locked .file-info {
   pointer-events: none;
   opacity: 0.5;
 }
-.ui-locked .right-panel {
-  pointer-events: none;
-  opacity: 0.5;
-}
-.ui-locked .transport-offset {
-  pointer-events: none;
-  opacity: 0.35;
-}
-.ui-locked .transport-loop {
-  pointer-events: none;
-  opacity: 0.35;
-}
-.ui-locked .tc-generator-controls {
-  pointer-events: none;
-  opacity: 0.35;
-}
-/* Keep status bar clickable (lock indicator needs to be tappable to unlock) */
-.ui-locked .status-bar {
-  pointer-events: auto;
-  opacity: 1;
-}
+/* Transport play/pause/stop/seek buttons stay usable */
+.ui-locked .transport-buttons { pointer-events: auto !important; opacity: 1 !important; }
+.ui-locked .scrub-row { pointer-events: auto !important; opacity: 1 !important; }
+/* Status bar stays clickable (lock indicator) */
+.ui-locked .status-bar { pointer-events: auto; opacity: 1; }
 
 /* ── Error Boundary ──────────────────────────────────────── */
 .error-boundary {
