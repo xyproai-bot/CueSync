@@ -913,6 +913,9 @@ app.whenReady().then(() => {
   // Only in production — dev builds can't use the updater
   setTimeout(() => checkForUpdates(true), 5000)
 
+  // Auto-start Remote Display server (WebSocket + HTTP on port 3100)
+  startRemoteServer(win)
+
   // IPC: get LTCast base path
   ipcMain.handle('get-ltcast-path', () => ltcastDir)
 

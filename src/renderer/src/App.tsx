@@ -61,6 +61,8 @@ export default function App(): React.JSX.Element {
   // MIDI activity indicator
   const [midiActivity, setMidiActivity] = useState(false)
   const midiActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Ref for openFile so remote/OSC handlers can call it
+  const openFileRef = useRef<((path?: string, offset?: number) => Promise<void>) | null>(null)
 
   // Cancel any pending auto-advance countdown
   const cancelAutoAdvance = useCallback((): void => {
@@ -210,6 +212,13 @@ export default function App(): React.JSX.Element {
 
   // OSC Input: listen for remote control commands from lighting consoles
   useEffect(() => {
+    const loadSetlistItem = (idx: number): void => {
+      const s = useStore.getState()
+      const item = s.setlist[idx]
+      if (!item) return
+      s.setActiveSetlistIndex(idx)
+      openFileRef.current?.(item.path, item.offsetFrames)
+    }
     const cleanup = window.api.onOscInput((action: string, arg?: number) => {
       const s = useStore.getState()
       if (action === 'play' || action === 'play-pause') {
@@ -227,14 +236,14 @@ export default function App(): React.JSX.Element {
       } else if (action === 'next') {
         if (s.setlist.length > 0 && s.activeSetlistIndex !== null) {
           const ni = Math.min(s.activeSetlistIndex + 1, s.setlist.length - 1)
-          if (ni !== s.activeSetlistIndex) s.setActiveSetlistIndex(ni)
+          if (ni !== s.activeSetlistIndex) loadSetlistItem(ni)
         }
       } else if (action === 'prev') {
         if (s.setlist.length > 0 && s.activeSetlistIndex !== null && s.activeSetlistIndex > 0) {
-          s.setActiveSetlistIndex(s.activeSetlistIndex - 1)
+          loadSetlistItem(s.activeSetlistIndex - 1)
         }
       } else if (action === 'goto' && typeof arg === 'number') {
-        if (arg >= 0 && arg < s.setlist.length) s.setActiveSetlistIndex(arg)
+        if (arg >= 0 && arg < s.setlist.length) loadSetlistItem(arg)
       }
     })
     return cleanup
@@ -242,6 +251,13 @@ export default function App(): React.JSX.Element {
 
   // Remote Display / Stream Deck: listen for WebSocket commands
   useEffect(() => {
+    const loadSetlistItem = (idx: number): void => {
+      const s = useStore.getState()
+      const item = s.setlist[idx]
+      if (!item) return
+      s.setActiveSetlistIndex(idx)
+      openFileRef.current?.(item.path, item.offsetFrames)
+    }
     const cleanup = window.api.onRemoteAction((action: string, index?: number) => {
       const s = useStore.getState()
       if (action === 'play' || action === 'play-pause') {
@@ -259,14 +275,14 @@ export default function App(): React.JSX.Element {
       } else if (action === 'next') {
         if (s.setlist.length > 0 && s.activeSetlistIndex !== null) {
           const ni = Math.min(s.activeSetlistIndex + 1, s.setlist.length - 1)
-          if (ni !== s.activeSetlistIndex) s.setActiveSetlistIndex(ni)
+          if (ni !== s.activeSetlistIndex) loadSetlistItem(ni)
         }
       } else if (action === 'prev') {
         if (s.setlist.length > 0 && s.activeSetlistIndex !== null && s.activeSetlistIndex > 0) {
-          s.setActiveSetlistIndex(s.activeSetlistIndex - 1)
+          loadSetlistItem(s.activeSetlistIndex - 1)
         }
       } else if (action === 'goto' && typeof index === 'number') {
-        if (index >= 0 && index < s.setlist.length) s.setActiveSetlistIndex(index)
+        if (index >= 0 && index < s.setlist.length) loadSetlistItem(index)
       }
     })
     return cleanup
@@ -1038,6 +1054,7 @@ export default function App(): React.JSX.Element {
       toast.error(`${t(useStore.getState().lang, 'loadFailed')}: ${e}`)
     }
   }
+  openFileRef.current = openFile
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault()
