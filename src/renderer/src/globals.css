@@ -681,6 +681,16 @@ html, body, #root {
   justify-content: center;
   z-index: 1000;
   cursor: pointer;
+  transition: background 0.5s ease;
+}
+/* Big Clock state colors — visible from 2+ meters away in dark environments */
+.fullscreen-tc--playing { background: #0a1a0a; }  /* very dark green tint = running OK */
+.fullscreen-tc--warning { background: #1a0a0a; animation: fs-warning-pulse 1.5s ease-in-out infinite; }
+.fullscreen-tc--paused  { background: #1a1a0a; }  /* very dark amber tint = paused */
+.fullscreen-tc--stopped { background: #0a0a0a; }  /* near black = stopped */
+@keyframes fs-warning-pulse {
+  0%, 100% { background: #1a0a0a; }
+  50% { background: #2a0a0a; }
 }
 
 /* ── File info / drop zone ────────────────────────────────── */

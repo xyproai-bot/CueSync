@@ -16,3 +16,4 @@ export const CHECKOUT_URL_VOLUME = 'mailto:xypro.ai@gmail.com?subject=LTCast%20V
 
 /** Maximum days a validated license is trusted offline */
 export const LICENSE_OFFLINE_GRACE_DAYS = 30
+// v0.4.1 released

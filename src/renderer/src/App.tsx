@@ -179,6 +179,35 @@ export default function App(): React.JSX.Element {
     return () => clearInterval(licenseCheckInterval)
   }, [])
 
+  // Show Log: auto-log transport + song changes via store subscription
+  useEffect(() => {
+    let prevPlayState = useStore.getState().playState
+    let prevActiveIndex = useStore.getState().activeSetlistIndex
+    const unsub = useStore.subscribe((s, prev) => {
+      // Log transport state changes
+      if (s.playState !== prevPlayState) {
+        prevPlayState = s.playState
+        const song = s.activeSetlistIndex !== null ? s.setlist[s.activeSetlistIndex]?.name ?? '' : s.fileName ?? ''
+        window.api.showlogEvent(s.playState, song, '')
+      }
+      // Log song changes
+      if (s.activeSetlistIndex !== prevActiveIndex && s.activeSetlistIndex !== null) {
+        prevActiveIndex = s.activeSetlistIndex
+        const item = s.setlist[s.activeSetlistIndex]
+        if (item) window.api.showlogEvent('song_change', item.name, `index=${s.activeSetlistIndex}`)
+      }
+      // Log LTC signal loss
+      if (prev.ltcSignalOk && !s.ltcSignalOk && s.playState === 'playing') {
+        window.api.showlogEvent('ltc_signal_lost', '', '')
+      }
+      // Log device disconnect
+      if (prev.ltcSignalOk !== undefined && !s.ltcSignalOk && s.playState !== 'playing') {
+        // Skip — not during playback
+      }
+    })
+    return unsub
+  }, [])
+
   // Init engine + MIDI once
   useEffect(() => {
     engine.current = new AudioEngine({
@@ -1137,9 +1166,15 @@ export default function App(): React.JSX.Element {
   }
 
   if (fullscreenTc) {
+    const s = useStore.getState()
+    const fsClass = s.playState === 'playing'
+      ? (s.ltcSignalOk ? 'fullscreen-tc fullscreen-tc--playing' : 'fullscreen-tc fullscreen-tc--warning')
+      : s.playState === 'paused'
+        ? 'fullscreen-tc fullscreen-tc--paused'
+        : 'fullscreen-tc fullscreen-tc--stopped'
     return (
       <div
-        className="fullscreen-tc"
+        className={fsClass}
         onClick={() => setFullscreenTc(false)}
         title={t(lang, 'clickToExit')}
       >

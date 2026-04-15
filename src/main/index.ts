@@ -1164,6 +1164,50 @@ app.whenReady().then(() => {
   ipcMain.handle('get-app-version', () => app.getVersion())
   ipcMain.handle('check-for-updates', () => checkForUpdates(false))
 
+  // ── Show Log (CSV performance log) ──
+  let showLogStream: import('fs').WriteStream | null = null
+  let showLogPath: string | null = null
+
+  ipcMain.handle('showlog-start', (_event, showName: string) => {
+    try {
+      const logsDir = join(app.getPath('userData'), 'logs')
+      if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true })
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const time = new Date().toISOString().slice(11, 19).replace(/:/g, '')
+      const safeName = (showName || 'show').replace(/[^a-zA-Z0-9_-]/g, '_')
+      showLogPath = join(logsDir, `${date}_${time}_${safeName}.csv`)
+      const { createWriteStream } = require('fs')
+      showLogStream = createWriteStream(showLogPath, { flags: 'a' })
+      showLogStream.write('Timestamp,Event,Song,Details\n')
+      showLogStream.write(`${new Date().toISOString()},show_start,${showName},\n`)
+      return showLogPath
+    } catch { return null }
+  })
+
+  ipcMain.on('showlog-event', (_event, eventType: string, song: string, details: string) => {
+    if (!showLogStream) return
+    // Escape CSV fields
+    const esc = (s: string): string => s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
+    showLogStream.write(`${new Date().toISOString()},${esc(eventType)},${esc(song)},${esc(details)}\n`)
+  })
+
+  ipcMain.handle('showlog-stop', () => {
+    if (showLogStream) {
+      showLogStream.write(`${new Date().toISOString()},show_end,,\n`)
+      showLogStream.end()
+      showLogStream = null
+    }
+    const p = showLogPath
+    showLogPath = null
+    return p
+  })
+
+  ipcMain.handle('showlog-open-folder', () => {
+    const logsDir = join(app.getPath('userData'), 'logs')
+    if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true })
+    shell.openPath(logsDir)
+  })
+
   // ── Window controls (custom title bar) ──
   ipcMain.handle('window:minimize', () => { BrowserWindow.getFocusedWindow()?.minimize() })
   ipcMain.handle('window:maximize', () => {

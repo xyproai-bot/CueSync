@@ -77,6 +77,13 @@ contextBridge.exposeInMainWorld('api', {
   oscSendSong: (name: string, index: number, targetIp: string, port: number) =>
     ipcRenderer.send('osc-send-song', name, index, targetIp, port),
 
+  // Show Log
+  showlogStart: (showName: string) => ipcRenderer.invoke('showlog-start', showName),
+  showlogEvent: (eventType: string, song: string, details: string) =>
+    ipcRenderer.send('showlog-event', eventType, song, details),
+  showlogStop: () => ipcRenderer.invoke('showlog-stop'),
+  showlogOpenFolder: () => ipcRenderer.invoke('showlog-open-folder'),
+
   // Menu command listeners
   onMenuCommand: (channel: string, callback: (...args: unknown[]) => void) => {
     const handler = (_event: unknown, ...args: unknown[]): void => callback(...args)
