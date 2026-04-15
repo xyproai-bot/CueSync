@@ -59,14 +59,24 @@
     background: #222;
     border: 1px solid #444;
     color: #e0e0e0;
-    padding: 10px 24px;
-    border-radius: 4px;
-    font-size: 14px;
+    padding: 14px 32px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
-    min-width: 60px;
+    min-width: 80px;
+    min-height: 48px; /* Apple HIG / Material 44dp+ touch target */
+    -webkit-tap-highlight-color: transparent;
   }
   .controls button:hover { background: #333; }
   .controls button:active { background: #00d4ff; color: #000; }
+  .fullscreen-btn {
+    position: fixed; top: 8px; right: 8px;
+    background: rgba(255,255,255,0.1); border: none; color: #888;
+    font-size: 20px; cursor: pointer; padding: 6px 10px; border-radius: 4px;
+    z-index: 10;
+  }
+  .fullscreen-btn:hover { color: #fff; }
   .disconnected {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.9);
@@ -76,6 +86,7 @@
 </style>
 </head>
 <body>
+  <button class="fullscreen-btn" onclick="toggleFs()" title="Fullscreen">⛶</button>
   <div class="tc" id="tc">--:--:--:--</div>
   <div class="info">
     <span class="status-dot" id="dot"></span>
@@ -142,6 +153,11 @@ function connect() {
   }
 
   ws.onerror = () => ws.close()
+}
+
+function toggleFs() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen()
+  else document.exitFullscreen()
 }
 
 function send(action) {

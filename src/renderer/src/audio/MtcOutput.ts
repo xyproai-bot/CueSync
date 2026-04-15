@@ -24,6 +24,9 @@ export class MtcOutput {
   private _perfNowAtPlayStart = 0
   private _audioTimeAtPlayStart = 0
   private _lastQfTimestamp = 0  // chained timestamp of the last QF sent (ms, performance.now() scale)
+  // M2: Cache all 8 nibbles from the first frame of each QF pair.
+  // MIDI MTC spec requires all 8 QF pieces to describe the SAME timecode.
+  private _cachedNibbles: number[] | null = null
   onPortsChanged: (() => void) | null = null
   onPortDisconnected: ((portName: string) => void) | null = null
 
@@ -224,14 +227,23 @@ export class MtcOutput {
       this._lastQfTimestamp = anchorPerfTime
     }
 
+    // M2: Cache nibbles at pieces 0-3 (first half of QF pair).
+    // MIDI MTC spec: all 8 QF pieces must describe the SAME timecode value.
+    // Pieces 0-3 come from frame N, pieces 4-7 must also use frame N's nibbles.
+    const nextPiece = (this.lastQfPiece + 1) % 8
+    if (nextPiece <= 3) {
+      // Starting a new QF pair — cache these nibbles for pieces 4-7
+      this._cachedNibbles = nibbles
+    }
+    const useNibbles = this._cachedNibbles ?? nibbles
+
     // Send 4 pieces, each chained exactly qfIntervalMs from the previous.
-    // JS event-loop jitter does NOT affect spacing — only the absolute position.
     try {
       for (let i = 0; i < 4; i++) {
         this._lastQfTimestamp += qfIntervalMs
         this.lastQfPiece = (this.lastQfPiece + 1) % 8
         const piece = this.lastQfPiece
-        this.selectedOutput!.send([0xf1, (piece << 4) | nibbles[piece]], this._lastQfTimestamp)
+        this.selectedOutput!.send([0xf1, (piece << 4) | useNibbles[piece]], this._lastQfTimestamp)
       }
     } catch {
       const name = this.selectedOutput?.name ?? 'Unknown'

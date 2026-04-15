@@ -44,6 +44,7 @@ export default function App(): React.JSX.Element {
   const isResizingRightPanel = useRef(false)
   const [showLtcWavDialog, setShowLtcWavDialog] = useState(false)
   const [showLicenseDialog, setShowLicenseDialog] = useState(false)
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
   const lastBpmUpdateTime = useRef(0)
   // Auto-advance: timer ref + countdown state
   const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -766,6 +767,13 @@ export default function App(): React.JSX.Element {
           setPlayState('stopped')
           setTimecode(null)
         }
+      }
+
+      // ?: toggle keyboard shortcuts help
+      if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) {
+        e.preventDefault()
+        setShowShortcutsHelp(prev => !prev)
+        return
       }
 
       // F11: toggle fullscreen timecode
@@ -1506,6 +1514,27 @@ export default function App(): React.JSX.Element {
       )}
       {showLicenseDialog && (
         <LicenseDialog onClose={() => setShowLicenseDialog(false)} />
+      )}
+      {showShortcutsHelp && (
+        <div className="shortcuts-overlay" onClick={() => setShowShortcutsHelp(false)}>
+          <div className="shortcuts-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>Keyboard Shortcuts</h3>
+            <table>
+              <tbody>
+                <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Stop</td></tr>
+                <tr><td><kbd>F11</kbd></td><td>Fullscreen Timecode</td></tr>
+                <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Prev / Next Song</td></tr>
+                <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Set Loop A / B</td></tr>
+                <tr><td><kbd>Ctrl+L</kbd></td><td>UI Lock</td></tr>
+                <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo Markers</td></tr>
+                <tr><td><kbd>Ctrl+←</kbd> <kbd>→</kbd></td><td>Jump to Marker</td></tr>
+                <tr><td><kbd>?</kbd></td><td>This Help</td></tr>
+              </tbody>
+            </table>
+            <button className="shortcuts-close" onClick={() => setShowShortcutsHelp(false)}>Close</button>
+          </div>
+        </div>
       )}
     </div>
   )

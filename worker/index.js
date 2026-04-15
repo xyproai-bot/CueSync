@@ -158,6 +158,22 @@ async function handleWebhook(request, env) {
   const payload = JSON.parse(rawBody)
   const eventName = payload.meta?.event_name
 
+  // M3: Replay attack protection — dedup by event ID + timestamp check
+  const eventId = payload.meta?.webhook_id || payload.meta?.event_id
+  if (eventId) {
+    const dedupKey = `webhook_event:${eventId}`
+    const seen = await env.TRIAL_KV.get(dedupKey)
+    if (seen) return json({ ok: true, note: 'duplicate event ignored' })
+    // Mark as processed (TTL 24h)
+    await env.TRIAL_KV.put(dedupKey, '1', { expirationTtl: 86400 })
+  }
+  // Reject events older than 5 minutes
+  const createdAt = payload.meta?.created_at
+  if (createdAt) {
+    const age = Date.now() - new Date(createdAt).getTime()
+    if (age > 5 * 60 * 1000) return json({ ok: true, note: 'stale event ignored' })
+  }
+
   // Extract license key from the payload
   // LemonSqueezy includes license_key in meta.custom_data or in the data object
   const licenseKey = extractLicenseKey(payload)

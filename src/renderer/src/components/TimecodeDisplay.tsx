@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, memo } from 'react'
 import { useStore } from '../store'
 import { t } from '../i18n'
 
@@ -21,7 +21,7 @@ function formatCountdown(remaining: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-export function TimecodeDisplay({ fullscreen }: Props): React.JSX.Element {
+export const TimecodeDisplay = memo(function TimecodeDisplay({ fullscreen }: Props): React.JSX.Element {
   const {
     timecode, detectedFps, forceFps, setForceFps, lang,
     tcGeneratorMode, setTcGeneratorMode,
@@ -136,7 +136,7 @@ export function TimecodeDisplay({ fullscreen }: Props): React.JSX.Element {
       )}
     </div>
   )
-}
+})
 
 /**
  * Timecode input component — HH:MM:SS:FF format with validation

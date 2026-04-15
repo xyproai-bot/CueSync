@@ -1807,6 +1807,32 @@ html, body, #root {
 /* Status bar stays clickable (lock indicator) */
 .ui-locked .status-bar { pointer-events: auto; opacity: 1; }
 
+/* ── Keyboard Shortcuts Help ────────────────────────────── */
+.shortcuts-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999;
+}
+.shortcuts-dialog {
+  background: #1e1e1e; border: 1px solid #333; border-radius: 8px;
+  padding: 20px 28px; min-width: 320px; max-width: 420px;
+}
+.shortcuts-dialog h3 { margin: 0 0 12px; color: #00d4ff; font-size: 16px; }
+.shortcuts-dialog table { width: 100%; border-collapse: collapse; }
+.shortcuts-dialog td { padding: 5px 8px; font-size: 13px; color: #ccc; }
+.shortcuts-dialog td:first-child { text-align: right; white-space: nowrap; width: 120px; }
+.shortcuts-dialog kbd {
+  background: #333; border: 1px solid #555; border-radius: 3px;
+  padding: 1px 6px; font-family: monospace; font-size: 12px; color: #fff;
+}
+.shortcuts-close {
+  margin-top: 12px; width: 100%; padding: 8px;
+  background: #333; border: 1px solid #444; border-radius: 4px;
+  color: #ccc; cursor: pointer; font-size: 13px;
+}
+.shortcuts-close:hover { background: #444; }
+
 /* ── Error Boundary ──────────────────────────────────────── */
 .error-boundary {
   display: flex;
