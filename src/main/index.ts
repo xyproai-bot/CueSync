@@ -289,11 +289,15 @@ function _getHardwareUUID(): string | null {
   try {
     const { execSync } = require('child_process')
     if (process.platform === 'win32') {
-      // Windows: SMBIOS UUID from motherboard
-      const out = execSync('wmic csproduct get uuid', { timeout: 5000 }).toString()
-      const lines = out.trim().split('\n').map((l: string) => l.trim()).filter(Boolean)
-      if (lines.length >= 2 && lines[1] !== 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF') {
-        return lines[1]
+      // Windows: SMBIOS UUID via PowerShell (wmic deprecated in Win11 24H2)
+      try {
+        const out = execSync('powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystemProduct).UUID"', { timeout: 5000 }).toString().trim()
+        if (out && out !== 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF') return out
+      } catch {
+        // Fallback: try wmic for older Windows
+        const out = execSync('wmic csproduct get uuid', { timeout: 5000 }).toString()
+        const lines = out.trim().split('\n').map((l: string) => l.trim()).filter(Boolean)
+        if (lines.length >= 2 && lines[1] !== 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF') return lines[1]
       }
     } else if (process.platform === 'darwin') {
       // macOS: IOPlatformUUID

@@ -76,7 +76,7 @@ html, body, #root {
   align-items: center;
   gap: 5px;
   background: transparent;
-  color: #666;
+  color: #888;
   border: none;
   padding: 4px 8px;
   font-size: 11px;
@@ -148,7 +148,7 @@ html, body, #root {
   height: 32px;
   background: transparent;
   border: none;
-  color: #666;
+  color: #888;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
@@ -184,7 +184,7 @@ html, body, #root {
 
 .btn-preset {
   background: transparent;
-  color: #666;
+  color: #888;
   border: 1px solid #1e1e1e;
   border-radius: 2px;
   padding: 3px 8px;
@@ -441,7 +441,7 @@ html, body, #root {
 .tc-label {
   font-size: 10px;
   letter-spacing: 3px;
-  color: #666;
+  color: #888;
   margin-bottom: 4px;
 }
 
@@ -548,7 +548,7 @@ html, body, #root {
 
 .tap-bpm-btn {
   background: transparent;
-  color: #666;
+  color: #888;
   border: 1px solid #1e1e1e;
   border-radius: 3px;
   padding: 2px 7px;
@@ -965,7 +965,7 @@ html, body, #root {
   color: #888;
   min-width: 50px;
 }
-.scrub-time--remaining { text-align: center; color: #666; min-width: 55px; }
+.scrub-time--remaining { text-align: center; color: #888; min-width: 55px; }
 .scrub-time--warn { color: #ff4444; font-weight: 700; }
 .scrub-time--right { text-align: right; }
 
@@ -1082,7 +1082,7 @@ html, body, #root {
 }
 
 /* Offset (now inside transport-offset) */
-.offset-label { font-size: 10px; color: #666; white-space: nowrap; }
+.offset-label { font-size: 10px; color: #888; white-space: nowrap; }
 .offset-unit  { font-size: 10px; color: #555; }
 
 .offset-slider {
@@ -1120,7 +1120,7 @@ html, body, #root {
 
 .btn-offset {
   background: transparent;
-  color: #666;
+  color: #888;
   border: 1px solid #1e1e1e;
   border-radius: 2px;
   width: 22px;
@@ -1565,7 +1565,7 @@ html, body, #root {
 .offset-adj-btn {
   background: transparent;
   border: 1px solid #1e1e1e;
-  color: #666;
+  color: #888;
   font-size: 13px;
   font-weight: bold;
   cursor: pointer;
@@ -1926,7 +1926,7 @@ html, body, #root {
 .ltc-wav-label {
   font-size: 10px;
   font-weight: 700;
-  color: #666;
+  color: #888;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   display: flex;
@@ -1969,7 +1969,7 @@ html, body, #root {
 .ltc-wav-fps-btn {
   background: transparent;
   border: 1px solid #2a2a2a;
-  color: #666;
+  color: #888;
   border-radius: 3px;
   padding: 4px 8px;
   font-size: 10px;
@@ -2065,7 +2065,7 @@ html, body, #root {
   align-items: center;
   gap: 6px;
   background: transparent;
-  color: #666;
+  color: #888;
   border: 1px solid #2a2a2a;
   border-radius: 4px;
   padding: 8px 18px;
@@ -2346,7 +2346,7 @@ html, body, #root {
 /* Params (ch·data) */
 .cp-cue-params {
   font-size: 10px;
-  color: #666;
+  color: #888;
   font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
@@ -2605,7 +2605,7 @@ html, body, #root {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #666;
+  color: #888;
   font-size: 11px;
   font-family: inherit;
   letter-spacing: 1px;
@@ -2656,7 +2656,7 @@ html, body, #root {
 .btn-add-marker {
   background: transparent;
   border: 1px solid #1e1e1e;
-  color: #666;
+  color: #888;
   font-size: 10px;
   padding: 3px 8px;
   border-radius: 2px;
@@ -2735,7 +2735,7 @@ html, body, #root {
 .structure-delete {
   background: none;
   border: none;
-  color: #666;
+  color: #888;
   font-size: 14px;
   cursor: pointer;
   padding: 0 4px;
@@ -2761,7 +2761,7 @@ html, body, #root {
 }
 .license-header h3 { margin: 0; font-size: 16px; color: #eee; }
 .license-close {
-  background: none; border: none; color: #666; font-size: 20px;
+  background: none; border: none; color: #888; font-size: 20px;
   cursor: pointer; padding: 0 4px;
 }
 .license-close:hover { color: #fff; }
@@ -2826,7 +2826,7 @@ html, body, #root {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #666;
+  color: #888;
   text-transform: uppercase;
 }
 .license-plan-price {

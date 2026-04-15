@@ -757,8 +757,12 @@ export class AudioEngine {
    */
   private _stopLtcSource(): void {
     if (this.ltcSource) { try { this.ltcSource.stop() } catch { /**/ } this.ltcSource = null }
-    // Disconnect worklet input (source is gone) but keep the node alive
+    // M4: disconnect worklet + gain inputs to prevent zombie splitter/merger nodes
     if (this.ltcWorkletNode) { try { this.ltcWorkletNode.disconnect() } catch { /**/ } }
+    if (this.ltcGainNode) { try { this.ltcGainNode.disconnect() } catch { /**/ }
+      // Re-connect gain to destination (node itself is reused)
+      if (this.ltcCtx) try { this.ltcGainNode.connect(this.ltcCtx.destination) } catch { /**/ }
+    }
     if (this.ltcEncoderNode) {
       try { this.ltcEncoderNode.port.postMessage({ type: 'stop' }) } catch { /**/ }
       try { this.ltcEncoderNode.disconnect() } catch { /**/ }

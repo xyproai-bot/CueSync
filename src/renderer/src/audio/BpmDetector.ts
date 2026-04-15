@@ -170,7 +170,7 @@ function autocorrelateBpm(onsets: Float32Array, sampleRate: number): number | nu
   const doubleLag = bestLag * 2
   if (doubleLag >= minLag && doubleLag <= maxLag) {
     const doubleCorr = corrs[doubleLag]
-    if (doubleCorr >= bestCorr * 0.95) {
+    if (doubleCorr >= bestCorr * 0.85) {
       bestLag = doubleLag
     }
   }

@@ -36,6 +36,10 @@ export function buildTimecodeLookup(
   const intervalMax = Math.ceil(sampleRate / (24 * 80 * 2) * 2.8)
 
   let lastEntryTime = -1
+  // M5: FPS hysteresis for offline decode (same logic as ltcProcessor.js)
+  let lockedFps: number | null = null
+  let fpsCandidateValue: number | null = null
+  let fpsCandidateCount = 0
 
   for (let i = 0; i < channelData.length; i++) {
     const sample = channelData[i]
@@ -82,6 +86,16 @@ export function buildTimecodeLookup(
         if (shiftReg === 0x3FFD && bitsReceived >= 80) {
           const tc = extractFrame(bitRing, bitRingPos, sampleRate, avgHalfBit)
           if (tc !== null) {
+            // M5: FPS hysteresis — lock after 3 consecutive matching frames
+            const rawFps = tc.fps
+            if (rawFps === fpsCandidateValue) {
+              fpsCandidateCount++
+              if (fpsCandidateCount >= 3 || lockedFps === null) lockedFps = rawFps
+            } else {
+              fpsCandidateValue = rawFps
+              fpsCandidateCount = 1
+            }
+            if (lockedFps !== null) tc.fps = lockedFps
             const timeSec = i / sampleRate
             if (timeSec - lastEntryTime > 0.02) {
               entries.push({ time: timeSec, tc })
