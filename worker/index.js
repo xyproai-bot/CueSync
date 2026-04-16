@@ -166,6 +166,18 @@ async function handleWebhook(request, env) {
   const payload = JSON.parse(rawBody)
   const eventName = payload.meta?.event_name
 
+  // Replay protection: dedup by event ID + store for 7 days
+  const eventId = payload.meta?.webhook_id || payload.data?.id
+  if (eventId) {
+    const dedupKey = `webhook-seen:${eventId}`
+    const seen = await env.TRIAL_KV.get(dedupKey)
+    if (seen) {
+      return json({ ok: true, event: eventName, note: 'duplicate event, ignored' })
+    }
+    // Mark as seen with 7-day TTL (LemonSqueezy retries failed webhooks for ~3 days)
+    await env.TRIAL_KV.put(dedupKey, '1', { expirationTtl: 7 * 24 * 3600 })
+  }
+
   // Extract license key from the payload
   // LemonSqueezy includes license_key in meta.custom_data or in the data object
   const licenseKey = extractLicenseKey(payload)
@@ -341,7 +353,18 @@ async function verifyWebhookSignature(rawBody, signature, secret) {
   const expected = Array.from(new Uint8Array(sig))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
-  return expected === signature
+  // Constant-time compare to prevent timing attacks on HMAC
+  return constantTimeEqual(expected, signature || '')
+}
+
+function constantTimeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return diff === 0
 }
 
 /** Extract license key from various LemonSqueezy webhook payload shapes. */

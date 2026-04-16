@@ -197,6 +197,9 @@ export default function App(): React.JSX.Element {
 
   // Init engine + MIDI once
   useEffect(() => {
+    // Guard against React StrictMode double-mount in dev — don't recreate
+    // the engine if it already exists (prevents orphaned AudioContext leaks)
+    if (engine.current) return
     engine.current = new AudioEngine({
       onTimecode: handleTimecode,
       onTimeUpdate: (t) => {
@@ -1383,10 +1386,21 @@ export default function App(): React.JSX.Element {
 
           <TimecodeDisplay onSeekToTimecode={(tcStr) => {
             const s = useStore.getState()
-            const fps = s.forceFps ?? s.detectedFps ?? s.generatorFps
+            const fps = s.timecode?.fps ?? s.forceFps ?? s.detectedFps ?? s.generatorFps ?? 25
             const targetFrames = tcToFrames(tcStr, fps)
-            const targetSec = targetFrames / fps
-            handleSeek(targetSec)
+            // Compute delta from current TC → new TC, apply to current audio time.
+            // This respects the file's TC start offset (e.g., LTC that starts at 01:00:00).
+            const curTc = s.timecode
+            if (curTc) {
+              const curTcStr = [curTc.hours, curTc.minutes, curTc.seconds, curTc.frames]
+                .map(n => String(n).padStart(2, '0')).join(':')
+              const curFrames = tcToFrames(curTcStr, fps)
+              const deltaSec = (targetFrames - curFrames) / fps
+              handleSeek(Math.max(0, s.currentTime + deltaSec))
+            } else {
+              // No current TC — fall back to absolute conversion (generator mode at 0)
+              handleSeek(targetFrames / fps)
+            }
           }} />
 
           {audioLoading ? (

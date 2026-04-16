@@ -365,7 +365,10 @@ function checkLocalTrial(): { daysLeft: number; expired: boolean } {
 let oscSocket: dgram.Socket | null = null
 
 function oscString(str: string): Buffer {
-  const buf = Buffer.from(str + '\0', 'ascii')
+  // utf8 — OSC 1.0 says ASCII but Resolume/TouchDesigner/most modern
+  // receivers accept utf8 and users expect CJK song names to transmit correctly.
+  // ASCII encoding silently stripped high bits, corrupting non-Latin names.
+  const buf = Buffer.from(str + '\0', 'utf8')
   const rem = buf.length % 4
   return rem === 0 ? buf : Buffer.concat([buf, Buffer.alloc(4 - rem)])
 }
@@ -471,7 +474,11 @@ function createWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      // Critical for live-show reliability: keep timers running at full rate
+      // when window is backgrounded (A-B loop, MIDI Clock, auto-advance, cue
+      // triggers all rely on sub-second timer precision)
+      backgroundThrottling: false
     },
     show: false,
     title: 'LTCast'
@@ -790,9 +797,35 @@ app.whenReady().then(() => {
     } catch { return [] }
   })
 
+  // Track paths the user has explicitly approved via save dialog, so
+  // save-preset(filePath) can't be abused to write arbitrary locations from
+  // a compromised renderer.
+  const approvedSavePaths = new Set<string>()
+
+  const sanitizePresetName = (name: string): string => {
+    // Strip illegal chars + leading dots (Windows reserved)
+    const cleaned = String(name).replace(/[<>:"/\\|?*\0]/g, '_').replace(/^\.+/, '_')
+    // Prevent path traversal components
+    return cleaned.replace(/\.\.+/g, '__').slice(0, 200) || 'untitled'
+  }
+
   // IPC: save preset to a specific path (used when path is already known)
   ipcMain.handle('save-preset', (_event, name: string, data: unknown, filePath?: string) => {
-    const dest = filePath ?? join(presetsDir, name.replace(/[<>:"/\\|?*]/g, '_') + '.ltcast')
+    let dest: string
+    if (filePath) {
+      // Only accept filePath if it's inside presetsDir OR was previously
+      // returned by save-preset-dialog (user-approved)
+      const resolved = require('path').resolve(filePath)
+      const presetsResolved = require('path').resolve(presetsDir)
+      const inPresetsDir = resolved.startsWith(presetsResolved + require('path').sep)
+      if (!inPresetsDir && !approvedSavePaths.has(resolved)) {
+        throw new Error('Invalid save path')
+      }
+      if (!resolved.endsWith('.ltcast')) throw new Error('Save path must end with .ltcast')
+      dest = resolved
+    } else {
+      dest = join(presetsDir, sanitizePresetName(name) + '.ltcast')
+    }
     const dir = dirname(dest)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     const content = JSON.stringify({ name, data, updatedAt: new Date().toISOString() }, null, 2)
@@ -811,14 +844,20 @@ app.whenReady().then(() => {
       ]
     })
     if (result.canceled || !result.filePath) return null
+    // Track the approved path so save-preset can write to it later
+    approvedSavePaths.add(require('path').resolve(result.filePath))
     return result.filePath
   })
 
   // IPC: delete preset from filesystem
   ipcMain.handle('delete-preset', (_event, name: string) => {
-    const safeName = name.replace(/[<>:"/\\|?*]/g, '_')
+    const safeName = sanitizePresetName(name)
     const filePath = join(presetsDir, safeName + '.ltcast')
-    if (existsSync(filePath)) unlinkSync(filePath)
+    // Ensure final path is still inside presetsDir after any basename collapse
+    const resolved = require('path').resolve(filePath)
+    const presetsResolved = require('path').resolve(presetsDir)
+    if (!resolved.startsWith(presetsResolved + require('path').sep)) return false
+    if (existsSync(resolved)) unlinkSync(resolved)
     return true
   })
 
@@ -1025,26 +1064,33 @@ app.whenReady().then(() => {
     return result.filePaths[0]
   })
 
-  // IPC: scan a directory (and subdirectories, max 10 levels) for files matching given filenames
+  // IPC: scan a directory (and subdirectories, max 3 levels) for files matching given filenames
+  // Uses lstatSync and skips symlinks to prevent symlink-escape DoS / info-leak
+  // Caps total entries visited to prevent runaway scans
   ipcMain.handle('scan-folder-for-files', (_e, folderPath: string, fileNames: string[]) => {
-    const MAX_DEPTH = 10
+    const MAX_DEPTH = 3
+    const MAX_ENTRIES = 50_000
     const result: Record<string, string> = {}
-    const targets = new Set(fileNames.map(n => n.toLowerCase()))
+    if (!isSafeFilePath(folderPath) || !Array.isArray(fileNames)) return result
+    const { lstatSync } = require('fs')
+    const targets = new Set(fileNames.map(n => String(n).toLowerCase()))
+    let visited = 0
     const scan = (dir: string, depth: number): void => {
-      if (depth > MAX_DEPTH) return
+      if (depth > MAX_DEPTH || visited > MAX_ENTRIES) return
       let entries: string[]
       try { entries = readdirSync(dir) } catch { return }
       for (const entry of entries) {
+        if (++visited > MAX_ENTRIES) return
         const full = join(dir, entry)
         try {
-          const st = statSync(full)
+          const st = lstatSync(full)  // lstat: do not follow symlinks
+          if (st.isSymbolicLink()) continue
           if (st.isDirectory()) {
             scan(full, depth + 1)
           } else if (targets.has(entry.toLowerCase()) && !result[entry.toLowerCase()]) {
             result[entry.toLowerCase()] = full
           }
         } catch { /* skip inaccessible */ }
-        // Early exit if all found
         if (Object.keys(result).length === targets.size) return
       }
     }
@@ -1080,11 +1126,23 @@ app.whenReady().then(() => {
     return result.filePaths
   })
 
+  // Reject paths that could trigger ffmpeg pseudo-protocol attacks (concat:,
+  // subfile, pipe:, cache:, ...) or remote SMB/UNC pulls. Only allow plain
+  // filesystem paths.
+  const isSafeFilePath = (p: unknown): p is string => {
+    if (typeof p !== 'string' || p.length === 0 || p.length > 1024) return false
+    if (p.startsWith('\\\\')) return false                                // UNC
+    if (/^[a-z][a-z0-9+.-]*:(?![\\/])/i.test(p)) return false             // protocol like concat:
+    if (p.includes('\0')) return false                                    // null byte
+    return true
+  }
+
   // IPC: get audio durations for multiple files via ffprobe
   ipcMain.handle('get-audio-durations', async (_event, filePaths: string[]) => {
     const results: Record<string, number | null> = {}
+    if (!Array.isArray(filePaths)) return results
     for (const fp of filePaths) {
-      if (!fp || !existsSync(fp)) { results[fp] = null; continue }
+      if (!isSafeFilePath(fp) || !existsSync(fp)) { results[fp as string] = null; continue }
       try {
         const dur = await new Promise<number>((resolve, reject) => {
           ffmpeg.ffprobe(fp, (err, metadata) => {
@@ -1101,7 +1159,8 @@ app.whenReady().then(() => {
   // IPC: read file as buffer (async to avoid blocking main process)
   const MAX_AUDIO_FILE_SIZE = 500 * 1024 * 1024  // 500 MB
   ipcMain.handle('read-audio-file', (_event, filePath: string) => {
-    if (!filePath || !existsSync(filePath)) throw new Error('File not found: ' + filePath)
+    if (!isSafeFilePath(filePath)) throw new Error('Invalid file path')
+    if (!existsSync(filePath)) throw new Error('File not found: ' + filePath)
     const fileSize = statSync(filePath).size
     if (fileSize > MAX_AUDIO_FILE_SIZE) throw new Error(`File too large (${Math.round(fileSize / 1024 / 1024)} MB, max ${MAX_AUDIO_FILE_SIZE / 1024 / 1024} MB)`)
     return new Promise<ArrayBuffer>((resolve, reject) => {
@@ -1128,7 +1187,8 @@ app.whenReady().then(() => {
 
   // IPC: extract audio from video via ffmpeg
   ipcMain.handle('extract-audio-from-video', async (_event, filePath: string) => {
-    if (!filePath || !existsSync(filePath)) throw new Error('File not found: ' + filePath)
+    if (!isSafeFilePath(filePath)) throw new Error('Invalid file path')
+    if (!existsSync(filePath)) throw new Error('File not found: ' + filePath)
 
     const outPath = join(tmpdir(), `ltcast-video-audio-${Date.now()}.wav`)
 
@@ -1214,19 +1274,39 @@ app.whenReady().then(() => {
     return true
   })
 
+  // Shared UDP send helper: validates port, swallows per-send errors so a
+  // transient bad target (ENETUNREACH) doesn't tear down the socket
+  const safeUdpSend = (sock: dgram.Socket | null, pkt: Buffer, port: number, ip: string): void => {
+    if (!sock) return
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return
+    try {
+      sock.send(pkt, 0, pkt.length, port, ip, (err) => {
+        if (err) console.warn('[UDP] send failed:', err.code || err.message)
+      })
+    } catch (e) {
+      console.warn('[UDP] sync send threw:', e)
+    }
+  }
+
+  // Validate OSC address pattern per OSC 1.0 (starts with /, limited charset)
+  const isValidOscAddress = (addr: string): boolean =>
+    typeof addr === 'string' && addr.length > 0 && addr.length <= 256 &&
+    addr.startsWith('/') && !/[\s#*,?[\]{}\x00-\x1f]/.test(addr)
+
   ipcMain.on('osc-send-tc', (_event, hours: number, minutes: number, seconds: number, frames: number, fps: number, targetIp: string, port: number) => {
     if (!oscSocket) return
     const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
     const pkt = oscMessage('/timecode', 'iiiii', hours, minutes, seconds, frames, fps)
-    oscSocket.send(pkt, 0, pkt.length, port, ip)
+    safeUdpSend(oscSocket, pkt, port, ip)
   })
 
-  // Custom OSC: send timecode as string with custom address pattern
   ipcMain.on('osc-send-tc-custom', (_event, address: string, tcString: string, fps: number, targetIp: string, port: number) => {
     if (!oscSocket) return
+    if (!isValidOscAddress(address)) return
     const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
-    const pkt = oscMessage(address, 'sf', tcString, fps)
-    oscSocket.send(pkt, 0, pkt.length, port, ip)
+    const safeTcStr = typeof tcString === 'string' ? tcString.slice(0, 64) : ''
+    const pkt = oscMessage(address, 'sf', safeTcStr, fps)
+    safeUdpSend(oscSocket, pkt, port, ip)
   })
 
   ipcMain.on('osc-send-transport', (_event, state: string, targetIp: string, port: number) => {
@@ -1236,14 +1316,17 @@ app.whenReady().then(() => {
                : state === 'pause' ? '/transport/pause'
                : '/transport/stop'
     const pkt = oscMessage(addr, '')
-    oscSocket.send(pkt, 0, pkt.length, port, ip)
+    safeUdpSend(oscSocket, pkt, port, ip)
   })
 
   ipcMain.on('osc-send-song', (_event, name: string, index: number, targetIp: string, port: number) => {
     if (!oscSocket) return
     const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
-    const pkt = oscMessage('/song', 'si', name, index)
-    oscSocket.send(pkt, 0, pkt.length, port, ip)
+    // Cap song name length to keep UDP packet below typical 1472 MTU
+    const safeName = typeof name === 'string' ? name.slice(0, 256) : ''
+    const safeIndex = Number.isInteger(index) ? index : 0
+    const pkt = oscMessage('/song', 'si', safeName, safeIndex)
+    safeUdpSend(oscSocket, pkt, port, ip)
   })
 
   // IPC: show input dialog (replacement for prompt())
@@ -1260,8 +1343,18 @@ app.whenReady().then(() => {
       filters: [{ name: 'PDF', extensions: ['pdf'] }]
     })
     if (result.canceled || !result.filePath) return null
-    const hiddenWin = new BrowserWindow({ show: false, width: 800, height: 600, webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } })
-    await hiddenWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    const hiddenWin = new BrowserWindow({
+      show: false, width: 800, height: 600,
+      webPreferences: {
+        nodeIntegration: false, contextIsolation: true, sandbox: true,
+        javascript: false  // PDF content is static HTML — disable JS entirely
+      }
+    })
+    // Inject a strict CSP so even if somehow untrusted HTML slips through
+    // (current caller sanitizes, but future callers may not), no JS/remote/file
+    const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; base-uri 'none'">`
+    const safeHtml = html.includes('<head>') ? html.replace('<head>', `<head>${csp}`) : csp + html
+    await hiddenWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(safeHtml)}`)
     const pdfBuffer = await hiddenWin.webContents.printToPDF({ printBackground: true, landscape: false })
     hiddenWin.close()
     writeFileSync(result.filePath, pdfBuffer)
@@ -1269,6 +1362,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('clipboard-write', (_event, text: string) => {
+    if (typeof text !== 'string' || text.length > 100_000) return
     const { clipboard } = require('electron')
     clipboard.writeText(text)
   })

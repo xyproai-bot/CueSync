@@ -23,6 +23,7 @@ export class MtcOutput {
   private lastSentFrame = -1
   private mtcMode: MtcMode = 'quarter-frame'
   private lastQfPiece = -1  // tracks which quarter-frame piece (0-7) was last sent
+  private _qfNibbleCache: number[] | null = null  // MTC spec: all 8 pieces encode the TC at piece 0's moment — cached to avoid mid-cycle TC drift
   private _perfNowAtPlayStart = 0
   private _audioTimeAtPlayStart = 0
   private _lastQfTimestamp = 0  // chained timestamp of the last QF sent (ms, performance.now() scale)
@@ -47,7 +48,12 @@ export class MtcOutput {
         this.selectedOutput = null
         this.lastSentFrame = -1
         this.lastQfPiece = -1
+        this._qfNibbleCache = null
         this.onPortDisconnected?.(name)
+      }
+      // Also handle cue port disconnect (previously unchecked)
+      if (port && port.state === 'disconnected' && this.cueOutput?.id === port.id) {
+        this.cueOutput = null
       }
       this.onPortsChanged?.()
     }
@@ -116,10 +122,13 @@ export class MtcOutput {
     if (!this.cueOutput) return
     try {
       const ch = (channel - 1) & 0x0F
-      this.cueOutput.send([0x90 | ch, note & 0x7F, velocity & 0x7F])
-      // Auto Note Off after 100ms
+      // Capture port reference at send time — if cueOutput is reassigned before
+      // the auto-note-off fires, the closure should still target the original
+      // port (otherwise the original device keeps a stuck note)
+      const port = this.cueOutput
+      port.send([0x90 | ch, note & 0x7F, velocity & 0x7F])
       setTimeout(() => {
-        try { this.cueOutput?.send([0x80 | ch, note & 0x7F, 0]) } catch { /* ignore */ }
+        try { port.send([0x80 | ch, note & 0x7F, 0]) } catch { /* ignore */ }
       }, 100)
     } catch { /* port may have gone away */ }
   }
@@ -162,7 +171,10 @@ export class MtcOutput {
 
   /**
    * Stop sending MIDI Clock.
-   * Sends 0xFC (Stop) and cancels pending ticks.
+   * Sends 0xFC (Stop), cancels pending ticks, and attempts to clear the
+   * Web MIDI output queue so orphan ticks scheduled with future timestamps
+   * don't fire AFTER 0xFC (which would cause downstream devices to lose sync
+   * on rapid stop→start cycles).
    */
   stopClock(): void {
     this._clockRunning = false
@@ -171,6 +183,10 @@ export class MtcOutput {
       this._clockTimerId = null
     }
     if (!this.selectedOutput) return
+    // Cancel any pending scheduled ticks (Chrome 87+ supports clear())
+    try {
+      (this.selectedOutput as unknown as { clear?: () => void }).clear?.()
+    } catch { /* older browsers / polyfill gap */ }
     try { this.selectedOutput.send([0xfc]) } catch { /* port gone */ }
   }
 
@@ -326,20 +342,35 @@ export class MtcOutput {
       this._lastQfTimestamp = anchorPerfTime
     }
 
+    // Guard against scheduling in the past after GC or long main-thread stall:
+    // Chrome silently drops past timestamps, which would cause piece gaps
+    const nowPerf = performance.now()
+    if (this._lastQfTimestamp < nowPerf) {
+      this._lastQfTimestamp = nowPerf + 1
+    }
+
     // Send 4 pieces, each chained exactly qfIntervalMs from the previous.
-    // JS event-loop jitter does NOT affect spacing — only the absolute position.
+    // MTC spec: ALL 8 pieces in a cycle must encode the TC at piece 0's moment
+    // (receiver reconstructs TC upon receiving piece 7, compensating for the 2-frame
+    // transmission delay). If we used the current TC for every call, pieces 4-7 would
+    // encode N+1's value while receiver expects N's → 2-frame display offset.
+    // Fix: cache nibbles when piece 0 is emitted, reuse for pieces 1-7.
     try {
       for (let i = 0; i < 4; i++) {
         this._lastQfTimestamp += qfIntervalMs
         this.lastQfPiece = (this.lastQfPiece + 1) % 8
         const piece = this.lastQfPiece
-        this.selectedOutput!.send([0xf1, (piece << 4) | nibbles[piece]], this._lastQfTimestamp)
+        if (piece === 0 || this._qfNibbleCache === null) {
+          this._qfNibbleCache = nibbles
+        }
+        this.selectedOutput!.send([0xf1, (piece << 4) | this._qfNibbleCache[piece]], this._lastQfTimestamp)
       }
     } catch {
       const name = this.selectedOutput?.name ?? 'Unknown'
       this.selectedOutput = null
       this.lastSentFrame = -1
       this.lastQfPiece = -1
+      this._qfNibbleCache = null
       this._lastQfTimestamp = 0
       this.onPortDisconnected?.(name)
     }

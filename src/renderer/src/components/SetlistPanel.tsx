@@ -194,6 +194,9 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
   const { setStandbySetlistIndex, standbySetlistIndex } = useStore()
 
   // Single click = standby (cue up), double-click = immediate load
+  // Debounce single-click by 250ms so double-click doesn't briefly flash standby.
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const handleItemClick = useCallback((index: number): void => {
     if (editingOffsetIdx === index) return
     const item = setlist[index]
@@ -201,16 +204,25 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
       handleRelink(index)
       return
     }
-    setStandbySetlistIndex(index)
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null
+      setStandbySetlistIndex(index)
+    }, 250)
   }, [setlist, missingPaths, setStandbySetlistIndex, handleRelink, editingOffsetIdx])
 
   const handleItemDoubleClick = useCallback((index: number): void => {
+    if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null }
     const item = setlist[index]
     if (missingPaths.has(item.path)) return
     setStandbySetlistIndex(null)
     setActiveSetlistIndex(index)
     onLoadFile(item.path, item.offsetFrames)
   }, [setlist, missingPaths, setStandbySetlistIndex, setActiveSetlistIndex, onLoadFile])
+
+  useEffect(() => {
+    return () => { if (clickTimerRef.current) clearTimeout(clickTimerRef.current) }
+  }, [])
 
   const handleToggleOffsetEdit = useCallback((e: React.MouseEvent, index: number): void => {
     e.stopPropagation()

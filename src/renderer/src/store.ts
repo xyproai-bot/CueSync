@@ -754,8 +754,9 @@ export const useStore = create<AppState>()(persist((set) => ({
   }),
   setSetlistItemNotes: (index: number, notes: string | undefined) => set((s) => {
     if (index < 0 || index >= s.setlist.length) return s
+    const capped = notes ? notes.slice(0, 500) : undefined
     const setlist = [...s.setlist]
-    setlist[index] = { ...setlist[index], notes: notes || undefined }
+    setlist[index] = { ...setlist[index], notes: capped || undefined }
     return { setlist, presetDirty: true }
   }),
   setSetlistItemMidiCues: (index: number, cues: MidiCuePoint[]) => set((s) => {
