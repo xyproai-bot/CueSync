@@ -29,23 +29,15 @@ jobs:
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force dist, out, release -ErrorAction SilentlyContinue
-          Write-Host "=== NODE_ENV: $env:NODE_ENV ==="
-          Write-Host "=== running npm run build ==="
           npm run build
-          Write-Host "=== npm run build exit: $LASTEXITCODE ==="
           if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
-          Write-Host "=== out/ tree after build ==="
-          Get-ChildItem -Recurse out | Select-Object -First 15 FullName, Length
-          Write-Host "=== electron-builder binary presence ==="
-          if (Test-Path node_modules/.bin/electron-builder.cmd) { Write-Host "found .cmd" } else { Write-Host "NOT FOUND .cmd" }
-          if (Test-Path node_modules/electron-builder) { Write-Host "found pkg" } else { Write-Host "NOT FOUND pkg" }
           $publishFlag = if ("${{ github.ref }}".StartsWith("refs/tags/")) { "always" } else { "never" }
-          Write-Host "=== calling electron-builder directly via node ==="
-          node node_modules/electron-builder/out/cli/cli.js --win --publish $publishFlag 2>&1 | Out-Host
-          Write-Host "=== electron-builder exit: $LASTEXITCODE ==="
+          # Invoke electron-builder via node directly. `npx electron-builder`
+          # silently exited 0 in <2s on windows-latest during v0.4.1 / first
+          # v0.5.0 / first v0.5.1 attempts, producing no .exe. Calling the
+          # CLI through node bypasses whatever the npx shim is doing wrong.
+          node node_modules/electron-builder/out/cli/cli.js --win --publish $publishFlag
           if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
-          Write-Host "=== dist/ tree after build ==="
-          Get-ChildItem -Recurse dist | Select-Object -First 20 FullName, Length
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USE_HARD_LINKS: "false"
