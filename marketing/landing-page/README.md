@@ -68,7 +68,7 @@ None wired. If you want them, drop Plausible or Cloudflare Web Analytics just ab
 
 ## Content review checklist
 
-- [ ] Screenshot is current v0.5.0 UI (no stale element positions)
+- [ ] Screenshot is current-release UI (no stale element positions)
 - [ ] Pricing numbers match Lemon Squeezy product page
 - [ ] All three download/buy links resolve
 - [ ] Comparison table disclaimer is present

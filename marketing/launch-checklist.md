@@ -9,7 +9,7 @@ All times assume **Pacific Time (PT)** — Product Hunt day starts at 00:00 PT. 
 ## T-7 days — preparation
 
 ### Product
-- [ ] v0.5.0 release is cut and tagged on `master`. Installers are signed and notarised. (Tracked by Sprint A / Sprint E — do not assume; confirm before this checklist starts.)
+- [ ] Current release (v0.5.x) is cut and tagged on `master`. Installers are signed and notarised. (Tracked by Sprint A / Sprint E — do not assume; confirm before this checklist starts.)
 - [ ] `ltcast.app` landing page is deployed on Cloudflare Pages with custom domain. Confirm `/buy` and `/download` shortlinks resolve.
 - [ ] Lemon Squeezy storefront is live. Run a $1 test purchase against a non-production test product to verify the webhook path end-to-end; refund immediately. Do NOT test against the real product — it muddies analytics and can trigger a fraud flag.
 - [ ] Machine fingerprint binding has been verified on at least one Windows and one macOS machine in the last 7 days. License revoke path (admin → revoke → app re-checks) has been exercised.
@@ -17,7 +17,7 @@ All times assume **Pacific Time (PT)** — Product Hunt day starts at 00:00 PT. 
 
 ### Content
 - [ ] Demo video is rendered in 16:9, 1:1, and 9:16 aspects. Uploaded to the YouTube channel as **unlisted**. (Public flip happens at T-0.)
-- [ ] Screenshot pack (shots 01–10 from `press-kit/screenshots.md`) is captured at v0.5.0 UI and compressed.
+- [ ] Screenshot pack (shots 01–10 from `press-kit/screenshots.md`) is captured at current-release UI and compressed.
 - [ ] Open Graph image (`og-image.png`) is produced and deployed.
 - [ ] Product Hunt "Ship" page is pre-populated: gallery images uploaded, description pasted, maker comment drafted, hunter invited.
 - [ ] Hacker News post draft exists but is NOT submitted. The post is a single-shot — one submission, no edits — so treat it carefully.
@@ -59,7 +59,7 @@ All times assume **Pacific Time (PT)** — Product Hunt day starts at 00:00 PT. 
 - [ ] Cloudflare Worker (license webhook) has the current deploy — `cd worker && npx wrangler deploy` if there's any doubt.
 - [ ] KV namespace bindings verified.
 - [ ] Status page (if any) is reachable.
-- [ ] Sentry / error reporting (if wired) has the v0.5.0 release registered so crashes get grouped correctly.
+- [ ] Sentry / error reporting (if wired) has the current release registered so crashes get grouped correctly.
 
 ### Schedule the post
 - [ ] Add a calendar entry for **00:01 PT** tomorrow for the PH launch. Set a 23:30 PT alarm to be at your desk.

@@ -58,6 +58,7 @@ One-pager values to cite with confidence:
 
 | Fact | Value |
 |------|-------|
+| Current version | 0.5.1 (shipped April 2026) |
 | Platforms | Windows 10+ (NSIS, signed) · macOS 12+ Universal DMG (signed, notarised) |
 | LTC frame rates | 24 / 25 / 29.97 drop-frame / 30 non-drop |
 | MTC modes | Quarter-frame (F1) + full-frame SysEx (F0 7F 7F 01 01 … F7) |
