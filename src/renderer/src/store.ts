@@ -142,7 +142,8 @@ async function loadPresetsFromDisk(): Promise<SavedPreset[]> {
 /** Ensure every setlist item has a unique id (backward compat for old presets). */
 function ensureSetlistIds(data: PresetData): PresetData {
   if (data.setlist && data.setlist.length > 0) {
-    data.setlist = data.setlist.map(item => item.id ? item : { ...item, id: nextSetlistId() })
+    // Return new object — don't mutate the cached preset in savedPresets
+    return { ...data, setlist: data.setlist.map(item => item.id ? item : { ...item, id: nextSetlistId() }) }
   }
   return data
 }
@@ -900,7 +901,14 @@ export const useStore = create<AppState>()(persist((set) => ({
       oscEnabled: false,
       oscTargetIp: '127.0.0.1',
       oscTargetPort: 8000,
-      markers: {}
+      oscTemplate: 'generic',
+      midiClockEnabled: false,
+      midiClockSource: 'detected',
+      midiClockManualBpm: 120,
+      standbySetlistIndex: null,
+      showLocked: false,
+      markers: {},
+      waveformZoom: {}
     })
   },
 
@@ -1168,8 +1176,11 @@ export const useStore = create<AppState>()(persist((set) => ({
     if (typeof merged.lang !== 'string') merged.lang = current.lang
     if (typeof merged.offsetFrames !== 'number' || !isFinite(merged.offsetFrames)) merged.offsetFrames = current.offsetFrames
     if (typeof merged.generatorFps !== 'number' || merged.generatorFps <= 0) merged.generatorFps = current.generatorFps
-    if (!Array.isArray(merged.midiCues)) merged.midiCues = current.midiCues ?? []
-    if (!Array.isArray(merged.waveformMarkers)) merged.waveformMarkers = current.waveformMarkers ?? []
+    if (!Array.isArray(merged.midiMappings)) merged.midiMappings = current.midiMappings ?? []
+    if (typeof merged.markers !== 'object' || merged.markers === null) merged.markers = current.markers ?? {}
+    if (typeof merged.waveformZoom !== 'object' || merged.waveformZoom === null) merged.waveformZoom = {}
+    // Validate license expiry (prevent NaN display from corrupted data)
+    if (merged.licenseExpiresAt && isNaN(new Date(merged.licenseExpiresAt).getTime())) merged.licenseExpiresAt = null
     // Ensure setlist items from old storage have IDs
     merged.setlist = merged.setlist.map((item: SetlistItem) =>
       item.id ? item : { ...item, id: nextSetlistId() }

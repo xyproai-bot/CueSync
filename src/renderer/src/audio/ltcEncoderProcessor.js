@@ -182,8 +182,10 @@ class LTCEncoderProcessor extends AudioWorkletProcessor {
     bits[25] = (Math.floor(s / 10) >> 1) & 1
     bits[26] = (Math.floor(s / 10) >> 2) & 1
 
-    // Bit 27: Biphase correction (0)
-    // Bits 28-31: User bits field 4 (0)
+    // Bit 27: Biphase correction parity (SMPTE 12M §6.2)
+    // Set so total 1-count in bits 0-63 is even, ensuring the sync word
+    // always begins with a predictable transition polarity.
+    // Computed after all data bits are set (below, before sync word).
 
     // Bits 32-35: Minutes units (BCD)
     bits[32] = (m % 10) & 1
@@ -214,8 +216,17 @@ class LTCEncoderProcessor extends AudioWorkletProcessor {
     bits[57] = (Math.floor(h / 10) >> 1) & 1
 
     // Bit 58: Reserved (0)
-    // Bit 59: Biphase correction polarity (0)
     // Bits 60-63: User bits field 8 (0)
+
+    // Compute biphase correction parity (SMPTE 12M §6.2):
+    // Count 1-bits in bits 0-63 (excluding bit 27 itself), then set bit 27
+    // so the total is even. This ensures bit 64 (sync start) always has a
+    // predictable edge polarity, which hardware decoders depend on.
+    let oneCount = 0
+    for (let i = 0; i < 64; i++) {
+      if (i !== 27) oneCount += bits[i]
+    }
+    bits[27] = oneCount % 2  // make total even
 
     // Bits 64-79: Sync word 0011111111111101
     // (LSB first: bits[64]=0, bits[65]=0, bits[66]=1, ..., bits[78]=0, bits[79]=1)
