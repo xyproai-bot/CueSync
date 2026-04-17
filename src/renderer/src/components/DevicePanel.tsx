@@ -40,6 +40,11 @@ export function DevicePanel({ onMidiPortChange, onMusicDeviceChange, onLtcDevice
     oscEnabled, setOscEnabled,
     oscTargetIp, setOscTargetIp,
     oscTargetPort, setOscTargetPort,
+    oscTemplate, setOscTemplate,
+    midiClockEnabled, setMidiClockEnabled,
+    midiClockSource, setMidiClockSource,
+    midiClockManualBpm, setMidiClockManualBpm,
+    tappedBpm, detectedBpm,
     lang
   } = useStore()
 
@@ -204,6 +209,64 @@ export function DevicePanel({ onMidiPortChange, onMusicDeviceChange, onLtcDevice
         <span className="ltc-gain-hint">{t(lang, 'mtcModeHint')}</span>
       </div>
 
+      {/* MIDI Clock Output */}
+      <div className="device-row">
+        <span className="device-label">{t(lang, 'midiClockEnabled')}</span>
+        <div className="artnet-row">
+          <label className="artnet-toggle">
+            <input
+              type="checkbox"
+              checked={midiClockEnabled}
+              disabled={!selectedMidiPort}
+              onChange={(e) => setMidiClockEnabled(e.target.checked)}
+            />
+            <span>{midiClockEnabled ? t(lang, 'artnetOn') : t(lang, 'artnetOff')}</span>
+          </label>
+          <span className={`signal-dot${midiClockEnabled && selectedMidiPort ? ' signal-ok' : ' signal-off'}`} />
+        </div>
+        {midiClockEnabled && selectedMidiPort && (
+          <>
+            <div className="artnet-ip-row">
+              <span className="artnet-ip-label">{t(lang, 'midiClockSource')}</span>
+              <select
+                className="device-select"
+                value={midiClockSource}
+                onChange={(e) => setMidiClockSource(e.target.value as 'detected' | 'tapped' | 'manual')}
+                style={{ width: 'auto', minWidth: '110px' }}
+              >
+                <option value="detected">{t(lang, 'midiClockSourceDetected')}{detectedBpm ? ` (${detectedBpm})` : ''}</option>
+                <option value="tapped">{t(lang, 'midiClockSourceTapped')}{tappedBpm ? ` (${tappedBpm})` : ''}</option>
+                <option value="manual">{t(lang, 'midiClockSourceManual')}</option>
+              </select>
+            </div>
+            {midiClockSource === 'manual' && (
+              <div className="artnet-ip-row">
+                <span className="artnet-ip-label">{t(lang, 'midiClockManualBpm')}</span>
+                <input
+                  type="number"
+                  className="artnet-ip-input"
+                  value={midiClockManualBpm}
+                  min={20}
+                  max={300}
+                  step={0.1}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value)
+                    if (!isNaN(v)) setMidiClockManualBpm(v)
+                  }}
+                  style={{ width: '80px' }}
+                />
+              </div>
+            )}
+          </>
+        )}
+        {!selectedMidiPort && (
+          <span className="ltc-gain-hint">{t(lang, 'midiClockNoPort')}</span>
+        )}
+        {selectedMidiPort && (
+          <span className="ltc-gain-hint">{t(lang, 'midiClockHint')}</span>
+        )}
+      </div>
+
       {/* Art-Net Timecode */}
       <div className="device-row">
         <span className="device-label">{t(lang, 'artnetOutput')}</span>
@@ -282,6 +345,22 @@ export function DevicePanel({ onMidiPortChange, onMusicDeviceChange, onLtcDevice
               }}
               style={{ width: '70px' }}
             />
+          </div>
+        )}
+        {oscEnabled && (
+          <div className="artnet-ip-row">
+            <span className="artnet-ip-label">{t(lang, 'oscTemplate')}</span>
+            <select
+              className="device-select"
+              value={oscTemplate}
+              onChange={(e) => setOscTemplate(e.target.value as 'generic' | 'resolume' | 'disguise' | 'watchout')}
+              style={{ width: 'auto', minWidth: '110px' }}
+            >
+              <option value="generic">Generic (/timecode)</option>
+              <option value="resolume">Resolume Arena</option>
+              <option value="disguise">Disguise (d3)</option>
+              <option value="watchout">WATCHOUT</option>
+            </select>
           </div>
         )}
       </div>

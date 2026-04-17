@@ -3,11 +3,18 @@ import { useStore, SortMode } from '../store'
 import { framesToTc, tcToString } from '../audio/timecodeConvert'
 import { t } from '../i18n'
 import { toast } from './Toast'
+import { buildCueSheetHtml } from '../utils/exportCueSheet'
 import { Tooltip } from './Tooltip'
 
 interface Props {
   onLoadFile: (path: string, offsetFrames?: number) => void
   onImportFiles?: () => void
+}
+
+function formatDurShort(secs: number): string {
+  const m = Math.floor(secs / 60)
+  const s = Math.floor(secs % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.Element {
@@ -20,6 +27,7 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
 
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [missingPaths, setMissingPaths] = useState<Set<string>>(new Set())
+  const [durations, setDurations] = useState<Record<string, number | null>>({})
   const [editingOffsetIdx, setEditingOffsetIdx] = useState<number | null>(null)
   const [editingOffsetStr, setEditingOffsetStr] = useState('')
   const [editingNotesIdx, setEditingNotesIdx] = useState<number | null>(null)
@@ -75,6 +83,22 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
     }).catch(() => {})
     return () => { cancelled = true }
   }, [setlist])
+
+  // Fetch durations only for paths not yet cached (avoids re-probing on every edit)
+  const pathsKey = setlist.map(i => i.path).join('|')
+  useEffect(() => {
+    if (setlist.length === 0) { setDurations({}); return }
+    let cancelled = false
+    const paths = setlist.map(item => item.path)
+    const missing = paths.filter(p => !(p in durations))
+    if (missing.length === 0) return
+    window.api.getAudioDurations(missing).then(result => {
+      if (cancelled) return
+      setDurations(prev => ({ ...prev, ...result }))
+    }).catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathsKey])
 
   // Re-check file existence when window regains focus
   useEffect(() => {
@@ -167,16 +191,38 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
     }
   }, [setlist, missingPaths, lang])
 
+  const { setStandbySetlistIndex, standbySetlistIndex } = useStore()
+
+  // Single click = standby (cue up), double-click = immediate load
+  // Debounce single-click by 250ms so double-click doesn't briefly flash standby.
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const handleItemClick = useCallback((index: number): void => {
-    if (editingOffsetIdx === index) return  // Don't load while editing offset
+    if (editingOffsetIdx === index) return
     const item = setlist[index]
     if (missingPaths.has(item.path)) {
       handleRelink(index)
       return
     }
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null
+      setStandbySetlistIndex(index)
+    }, 250)
+  }, [setlist, missingPaths, setStandbySetlistIndex, handleRelink, editingOffsetIdx])
+
+  const handleItemDoubleClick = useCallback((index: number): void => {
+    if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null }
+    const item = setlist[index]
+    if (missingPaths.has(item.path)) return
+    setStandbySetlistIndex(null)
     setActiveSetlistIndex(index)
     onLoadFile(item.path, item.offsetFrames)
-  }, [setlist, missingPaths, setActiveSetlistIndex, onLoadFile, handleRelink, editingOffsetIdx])
+  }, [setlist, missingPaths, setStandbySetlistIndex, setActiveSetlistIndex, onLoadFile])
+
+  useEffect(() => {
+    return () => { if (clickTimerRef.current) clearTimeout(clickTimerRef.current) }
+  }, [])
 
   const handleToggleOffsetEdit = useCallback((e: React.MouseEvent, index: number): void => {
     e.stopPropagation()
@@ -294,6 +340,21 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
       console.error('CSV export failed', e)
     }
   }, [setlist, lang])
+
+  const handleExportPdf = useCallback(async (): Promise<void> => {
+    if (setlist.length === 0) return
+    const s = useStore.getState()
+    const fps = s.forceFps ?? s.detectedFps ?? 25
+    const html = buildCueSheetHtml({
+      presetName: s.presetName || 'Untitled',
+      setlist,
+      markers: s.markers,
+      fps
+    })
+    const defaultName = `${s.presetName || 'cuesheet'}.pdf`
+    const savedPath = await window.api.printToPdf(html, defaultName)
+    if (savedPath) toast.success('PDF exported')
+  }, [setlist])
 
   const handleImportCsv = useCallback(async (): Promise<void> => {
     try {
@@ -421,6 +482,12 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
           >↑</button>
           <button
             className="setlist-hdr-btn"
+            onClick={handleExportPdf}
+            title="Export PDF Cue Sheet"
+            disabled={setlist.length === 0}
+          >PDF</button>
+          <button
+            className="setlist-hdr-btn"
             onClick={handleImportCsv}
             title={t(lang, 'importCsv')}
           >↓</button>
@@ -447,12 +514,13 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
               return (
                 <div key={item.id} className="setlist-item-wrap">
                   <div
-                    className={`setlist-item${i === activeSetlistIndex ? ' active' : ''}${isMissing ? ' missing' : ''}${isEditingOffset ? ' offset-open' : ''}`}
+                    className={`setlist-item${i === activeSetlistIndex ? ' active' : ''}${i === standbySetlistIndex ? ' standby' : ''}${isMissing ? ' missing' : ''}${isEditingOffset ? ' offset-open' : ''}`}
                     draggable={!isEditingOffset}
                     onDragStart={(e) => handleDragStart(e, i)}
                     onDragOver={(e) => handleDragOver(e, i)}
                     onDragEnd={handleDragEnd}
                     onClick={() => handleItemClick(i)}
+                    onDoubleClick={() => handleItemDoubleClick(i)}
                     title={isMissing ? t(lang, 'fileMissing') : item.name}
                   >
                     <span className="setlist-index">{i + 1}</span>
@@ -465,6 +533,9 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
                       )}
                       {item.name}
                     </span>
+                    {durations[item.path] != null && (
+                      <span className="setlist-duration">{formatDurShort(durations[item.path] as number)}</span>
+                    )}
                     {hasOffset && (
                       <span className="setlist-offset-badge" title={t(lang, 'songOffset')}>
                         {(item.offsetFrames ?? 0) >= 0 ? '+' : ''}{item.offsetFrames}f
@@ -609,6 +680,14 @@ export function SetlistPanel({ onLoadFile, onImportFiles }: Props): React.JSX.El
           </div>
 
           {/* Clear all at very bottom, red, with confirmation */}
+          {Object.keys(durations).length > 0 && (() => {
+            const total = setlist.reduce((sum, item) => sum + (durations[item.path] ?? 0), 0)
+            const h = Math.floor(total / 3600)
+            const m = Math.floor((total % 3600) / 60)
+            const s = Math.floor(total % 60)
+            const timeStr = h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
+            return <div className="setlist-total">{setlist.length} songs — {timeStr}</div>
+          })()}
           <button
             className="btn-setlist-clear-all"
             onClick={clearSetlist}

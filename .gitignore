@@ -22,3 +22,13 @@ Thumbs.db
 # Claude Code local settings
 .claude/
 src.zip
+
+# MCP config (local dev)
+.mcp.json
+
+# Local API notes / scratch
+API.txt
+
+# Cloudflare Worker local artifacts
+worker/.wrangler/
+worker/ai-dialogue.sh

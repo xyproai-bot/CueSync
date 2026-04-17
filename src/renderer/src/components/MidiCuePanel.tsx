@@ -13,6 +13,7 @@ interface Props {
   onMidiInputPortChange: (portId: string) => void
   onStartLearn: (mappingId: string) => void
   learningMappingId: string | null
+  lastFiredCueId?: string | null
 }
 
 const MSG_TYPES: Array<{ value: MidiCuePoint['messageType']; label: string }> = [
@@ -38,7 +39,7 @@ function typeColor(type: MidiCuePoint['messageType']): string {
   return 'pc'
 }
 
-export function MidiCuePanel({ onCueMidiPortChange, onMidiInputPortChange, onStartLearn, learningMappingId }: Props): React.JSX.Element {
+export function MidiCuePanel({ onCueMidiPortChange, onMidiInputPortChange, onStartLearn, learningMappingId, lastFiredCueId }: Props): React.JSX.Element {
   const {
     lang,
     midiOutputs,
@@ -180,7 +181,7 @@ export function MidiCuePanel({ onCueMidiPortChange, onMidiInputPortChange, onSta
                 <div className="cp-empty">{t(lang, 'noCues')}</div>
               )}
               {cues.map((cue) => (
-                <div key={cue.id} className={`cp-cue-item${cue.enabled ? '' : ' cp-cue-item--off'}`}>
+                <div key={cue.id} className={`cp-cue-item${cue.enabled ? '' : ' cp-cue-item--off'}${lastFiredCueId === cue.id ? ' cp-cue-item--fired' : ''}`}>
                   <button
                     className={`cp-cue-toggle${cue.enabled ? ' cp-cue-toggle--on' : ''}`}
                     onClick={() => handleToggleCue(cue.id)}

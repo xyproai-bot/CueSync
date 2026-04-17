@@ -57,6 +57,7 @@ interface Props {
   onPause: () => void
   onStop:  () => void
   onSeek:  (time: number) => void
+  onPanic?: () => void
 }
 
 function formatTime(sec: number): string {
@@ -68,7 +69,7 @@ function formatTime(sec: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${ms}`
 }
 
-export function Transport({ onPlay, onPause, onStop, onSeek }: Props): React.JSX.Element {
+export function Transport({ onPlay, onPause, onStop, onSeek, onPanic }: Props): React.JSX.Element {
   const {
     playState, currentTime, duration, loop, setLoop,
     offsetFrames, setOffsetFrames,
@@ -192,6 +193,11 @@ export function Transport({ onPlay, onPause, onStop, onSeek }: Props): React.JSX
           <button className="btn-transport btn-skip" onClick={() => onSeek(duration)} disabled={!duration} title="Go to end">
             <IconSkipForward />
           </button>
+          {onPanic && (
+            <button className="btn-transport btn-panic" onClick={onPanic} title="PANIC — stop all outputs">
+              !!
+            </button>
+          )}
         </div>
 
         {/* Right: A-B loop */}

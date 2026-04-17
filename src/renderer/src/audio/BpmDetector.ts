@@ -131,15 +131,24 @@ function autocorrelateBpm(onsets: Float32Array, sampleRate: number): number | nu
 
   if (maxLag >= onsets.length) return null
 
-  // Compute correlation for all lags
+  // Remove DC component (mean) before autocorrelation to eliminate the
+  // DC pedestal that biases toward slow tempos (large lags).
+  let sum = 0
+  for (let i = 0; i < onsets.length; i++) sum += onsets[i]
+  const mean = sum / onsets.length
+  const centered = new Float32Array(onsets.length)
+  for (let i = 0; i < onsets.length; i++) centered[i] = onsets[i] - mean
+
+  // Compute unnormalized correlation (don't divide by n — the decreasing
+  // n at large lags previously biased results toward slow tempos)
   const corrs = new Float32Array(maxLag + 1)
   for (let lag = minLag; lag <= maxLag; lag++) {
     let corr = 0
-    const n = onsets.length - lag
+    const n = centered.length - lag
     for (let i = 0; i < n; i++) {
-      corr += onsets[i] * onsets[i + lag]
+      corr += centered[i] * centered[i + lag]
     }
-    corrs[lag] = corr / n
+    corrs[lag] = corr
   }
 
   // Find best lag
@@ -156,22 +165,28 @@ function autocorrelateBpm(onsets: Float32Array, sampleRate: number): number | nu
 
   // Octave correction: check if half-lag (double BPM) is also strong.
   // If correlation at lag/2 is >= 80% of best, prefer the faster tempo.
+  let octaveCorrected = false
   const halfLag = Math.round(bestLag / 2)
   if (halfLag >= minLag && halfLag <= maxLag) {
     const halfCorr = corrs[halfLag]
     if (halfCorr >= bestCorr * 0.8) {
       bestCorr = halfCorr
       bestLag = halfLag
+      octaveCorrected = true
     }
   }
 
   // Sub-octave correction: check if double-lag (half BPM) is stronger.
   // Prevents slow ballads (e.g. 60 BPM) from being detected as 120 BPM.
-  const doubleLag = bestLag * 2
-  if (doubleLag >= minLag && doubleLag <= maxLag) {
-    const doubleCorr = corrs[doubleLag]
-    if (doubleCorr >= bestCorr * 0.95) {
-      bestLag = doubleLag
+  // Skip if octave correction already fired — prevents ping-pong oscillation
+  // where we swap to halfLag then immediately swap back to doubleLag (= original).
+  if (!octaveCorrected) {
+    const doubleLag = bestLag * 2
+    if (doubleLag >= minLag && doubleLag <= maxLag) {
+      const doubleCorr = corrs[doubleLag]
+      if (doubleCorr >= bestCorr * 0.95) {
+        bestLag = doubleLag
+      }
     }
   }
 

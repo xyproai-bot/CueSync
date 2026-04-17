@@ -104,7 +104,13 @@ export function Waveform({ musicData, ltcData, onSeek, onVideoOffsetChange, onCl
     })
 
     ws.on('interaction', (time: number) => onSeekRef.current(time))
-    ws.on('zoom', (px: number) => { zoomRef.current = px; drawMarkersRef.current() })
+    ws.on('zoom', (px: number) => {
+      zoomRef.current = px
+      drawMarkersRef.current()
+      // Persist zoom level per-file
+      const fp = useStore.getState().filePath
+      if (fp) useStore.getState().setWaveformZoom(fp, px)
+    })
     ws.on('scroll', () => { drawMarkersRef.current() })
 
     // Listen to native scroll on WaveSurfer's scroll container
@@ -149,11 +155,18 @@ export function Waveform({ musicData, ltcData, onSeek, onVideoOffsetChange, onCl
     const pos = Array.from(musicData)
     const neg = pos.map(v => -v)
     ws.load('', [pos, neg], duration)
-    // Capture initial pxPerSec after load (WaveSurfer doesn't fire 'zoom' for initial render)
+    // Restore saved zoom level or capture initial pxPerSec
     requestAnimationFrame(() => {
-      const container = musicContainerRef.current
-      if (container && duration > 0) {
-        zoomRef.current = container.clientWidth / duration
+      const fp = useStore.getState().filePath
+      const savedZoom = fp ? useStore.getState().waveformZoom[fp] : undefined
+      if (savedZoom && savedZoom > 1) {
+        ws.zoom(savedZoom)
+        zoomRef.current = savedZoom
+      } else {
+        const container = musicContainerRef.current
+        if (container && duration > 0) {
+          zoomRef.current = container.clientWidth / duration
+        }
       }
     })
   }, [musicData, duration])
