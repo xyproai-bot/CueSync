@@ -26,15 +26,18 @@ jobs:
         run: npx vitest run
 
       - name: Build and publish (Windows)
-        shell: bash
+        shell: pwsh
         run: |
-          rm -rf dist out release
+          Remove-Item -Recurse -Force dist, out, release -ErrorAction SilentlyContinue
+          Write-Host "=== running npm run build ==="
           npm run build
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            npx electron-builder --win --publish always
-          else
-            npx electron-builder --win --publish never
-          fi
+          Write-Host "=== npm run build exit code: $LASTEXITCODE ==="
+          if ($LASTEXITCODE -ne 0) { throw "npm run build failed ($LASTEXITCODE)" }
+          $publishFlag = if ("${{ github.ref }}".StartsWith("refs/tags/")) { "always" } else { "never" }
+          Write-Host "=== running electron-builder --publish $publishFlag ==="
+          npx electron-builder --win --publish $publishFlag
+          Write-Host "=== electron-builder exit code: $LASTEXITCODE ==="
+          if ($LASTEXITCODE -ne 0) { throw "electron-builder failed ($LASTEXITCODE)" }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USE_HARD_LINKS: "false"
