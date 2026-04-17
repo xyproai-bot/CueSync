@@ -65,6 +65,10 @@ export class AudioEngine {
   private ltcWorkletReady = false
   private ltcEncoderReady = false
   private ltcSource: AudioBufferSourceNode | null = null
+  // Track splitter/merger nodes so they can be disconnected and GC'd on stop.
+  // Without this, each pause/resume cycle leaks dead node fan-in into ltcGainNode.
+  private ltcSplitter: ChannelSplitterNode | null = null
+  private ltcMerger: ChannelMergerNode | null = null
   private ltcWorkletNode: AudioWorkletNode | null = null
   private ltcEncoderNode: AudioWorkletNode | null = null
   private ltcGainNode: GainNode | null = null
@@ -598,7 +602,11 @@ export class AudioEngine {
     this.ltcSource.buffer = this.buffer
     this.ltcSource.loop = this.loop
 
+    // Disconnect previous nodes before creating new ones (prevents leak)
+    try { this.ltcSplitter?.disconnect() } catch { /* ignore */ }
+    try { this.ltcMerger?.disconnect() } catch { /* ignore */ }
     const splitter = this.ltcCtx.createChannelSplitter(this.buffer.numberOfChannels)
+    this.ltcSplitter = splitter
     this.ltcSource.connect(splitter)
 
     // Reuse existing worklet node if available (keeps decoder clock calibrated)
@@ -627,6 +635,7 @@ export class AudioEngine {
 
     // Audio output: splitter → merger (mono→stereo) → gain → destination
     const merger = this.ltcCtx.createChannelMerger(2)
+    this.ltcMerger = merger
     splitter.connect(merger, this.ltcChannelIndex, 0)
     splitter.connect(merger, this.ltcChannelIndex, 1)
     merger.connect(this.ltcGainNode)
@@ -711,6 +720,10 @@ export class AudioEngine {
       try { this.ltcEncoderNode.disconnect() } catch { /**/ }
       this.ltcEncoderNode = null
     }
+    // Disconnect splitter/merger so they are GC'd rather than accumulating
+    // dead fan-in on the persistent gain node across pause/resume cycles
+    if (this.ltcSplitter) { try { this.ltcSplitter.disconnect() } catch { /**/ } this.ltcSplitter = null }
+    if (this.ltcMerger) { try { this.ltcMerger.disconnect() } catch { /**/ } this.ltcMerger = null }
   }
 
   /**
@@ -859,7 +872,7 @@ export class AudioEngine {
       seconds: s,
       frames: f,
       fps,
-      dropFrame: fps === 29.97
+      dropFrame: Math.abs(fps - 29.97) < 0.01
     }
 
     this.callbacks.onTimecode(tc)

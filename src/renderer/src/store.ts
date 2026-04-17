@@ -86,7 +86,7 @@ export interface WaveformMarker {
 
 export interface PresetData {
   lang: 'en' | 'zh' | 'ja'
-  rightTab: 'devices' | 'setlist' | 'cues' | 'structure'
+  rightTab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc' | 'log'
   offsetFrames: number
   loop: boolean
   loopA?: number | null
@@ -107,6 +107,7 @@ export interface PresetData {
   oscEnabled?: boolean
   oscTargetIp?: string
   oscTargetPort?: number
+  oscTemplate?: 'generic' | 'resolume' | 'disguise' | 'watchout'
   autoAdvance?: boolean
   autoAdvanceGap?: number
   // Sprint 2: MIDI Cue System
@@ -115,6 +116,10 @@ export interface PresetData {
   midiMappings?: MidiMapping[]
   // Sprint 4: Waveform Markers
   markers?: Record<string, WaveformMarker[]>
+  // MIDI Clock
+  midiClockEnabled?: boolean
+  midiClockSource?: 'detected' | 'tapped' | 'manual'
+  midiClockManualBpm?: number
   // UI Lock (show mode)
   showLocked?: boolean
   version?: number
@@ -137,12 +142,13 @@ async function loadPresetsFromDisk(): Promise<SavedPreset[]> {
 /** Ensure every setlist item has a unique id (backward compat for old presets). */
 function ensureSetlistIds(data: PresetData): PresetData {
   if (data.setlist && data.setlist.length > 0) {
-    data.setlist = data.setlist.map(item => item.id ? item : { ...item, id: nextSetlistId() })
+    // Return new object — don't mutate the cached preset in savedPresets
+    return { ...data, setlist: data.setlist.map(item => item.id ? item : { ...item, id: nextSetlistId() }) }
   }
   return data
 }
 
-const CURRENT_PRESET_VERSION = 6
+const CURRENT_PRESET_VERSION = 7
 
 /** Warn once if a preset was created by a newer version of the app. */
 function warnIfNewerVersion(data: PresetData): void {
@@ -188,6 +194,13 @@ function migratePreset(data: PresetData): PresetData {
   if (version < 6) {
     data.showLocked = data.showLocked ?? false
   }
+  // version 6 → 7: add MIDI Clock output + OSC template
+  if (version < 7) {
+    data.midiClockEnabled = data.midiClockEnabled ?? false
+    data.midiClockSource = data.midiClockSource ?? 'detected'
+    data.midiClockManualBpm = data.midiClockManualBpm ?? 120
+    data.oscTemplate = data.oscTemplate ?? 'generic'
+  }
   data.version = CURRENT_PRESET_VERSION
   return data
 }
@@ -199,7 +212,8 @@ function buildPresetData(s: Pick<AppState,
   'ltcChannel' | 'setlist' | 'generatorStartTC' | 'generatorFps' | 'tcGeneratorMode' |
   'artnetEnabled' | 'artnetTargetIp' | 'mtcMode' | 'autoAdvance' | 'autoAdvanceGap' |
   'selectedCueMidiPort' | 'midiInputPort' | 'midiMappings' |
-  'oscEnabled' | 'oscTargetIp' | 'oscTargetPort' | 'markers' | 'showLocked'>): PresetData {
+  'oscEnabled' | 'oscTargetIp' | 'oscTargetPort' | 'oscTemplate' | 'markers' | 'showLocked' |
+  'midiClockEnabled' | 'midiClockSource' | 'midiClockManualBpm'>): PresetData {
   return {
     version: CURRENT_PRESET_VERSION,
     lang: s.lang, rightTab: s.rightTab, offsetFrames: s.offsetFrames,
@@ -215,9 +229,12 @@ function buildPresetData(s: Pick<AppState,
     autoAdvance: s.autoAdvance, autoAdvanceGap: s.autoAdvanceGap,
     selectedCueMidiPort: s.selectedCueMidiPort,
     midiInputPort: s.midiInputPort, midiMappings: s.midiMappings,
-    oscEnabled: s.oscEnabled, oscTargetIp: s.oscTargetIp, oscTargetPort: s.oscTargetPort,
+    oscEnabled: s.oscEnabled, oscTargetIp: s.oscTargetIp, oscTargetPort: s.oscTargetPort, oscTemplate: s.oscTemplate,
     markers: s.markers,
-    showLocked: s.showLocked
+    showLocked: s.showLocked,
+    midiClockEnabled: s.midiClockEnabled,
+    midiClockSource: s.midiClockSource,
+    midiClockManualBpm: s.midiClockManualBpm
   }
 }
 
@@ -275,6 +292,14 @@ export interface AppState {
   oscTargetIp: string             // unicast IP, default '127.0.0.1'
   oscTargetPort: number           // default 8000
 
+  // MIDI Clock Output
+  midiClockEnabled: boolean
+  midiClockSource: 'detected' | 'tapped' | 'manual'
+  midiClockManualBpm: number      // 20–300, used when source = 'manual'
+
+  // OSC template preset
+  oscTemplate: 'generic' | 'resolume' | 'disguise' | 'watchout'
+
   // BPM
   tappedBpm: number | null
   detectedBpm: number | null
@@ -289,12 +314,17 @@ export interface AppState {
   videoStartTimecode: string | null
   videoLoading: boolean
 
+  // Audio file loading
+  audioLoading: boolean
+  loadingFileName: string | null
+
   // Timecode lookup (offline LTC decode)
   timecodeLookup: TimecodeLookupEntry[]
 
   // Setlist
   setlist: SetlistItem[]
   activeSetlistIndex: number | null
+  standbySetlistIndex: number | null  // cued but not yet loaded (Standby/GO workflow)
   previousSetlist: { setlist: SetlistItem[]; activeIndex: number | null } | null
   autoAdvance: boolean
   autoAdvanceGap: number  // seconds, 0–30
@@ -311,15 +341,20 @@ export interface AppState {
   markers: Record<string, WaveformMarker[]>
   markerUndoStack: Record<string, WaveformMarker[]>[]
 
+  // Waveform zoom memory (per-file pxPerSec)
+  waveformZoom: Record<string, number>
+
   // UI
-  rightTab: 'devices' | 'setlist' | 'cues' | 'structure'
+  rightTab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc' | 'log'
   lang: 'en' | 'zh' | 'ja'
   showLocked: boolean   // UI lock mode — prevents accidental changes during live shows
+  ultraDark: boolean    // Ultra-dark high-contrast mode for dim environments
 
   // License
   licenseKey: string | null
   licenseStatus: 'none' | 'valid' | 'expired' | 'invalid'
   licenseValidatedAt: number | null  // timestamp of last successful validation
+  licenseExpiresAt: string | null   // ISO date string for promo licenses
   trialDaysLeft: number | null       // null = not checked yet, 0 = expired
 
   // Project
@@ -362,15 +397,21 @@ export interface AppState {
   setOscEnabled: (enabled: boolean) => void
   setOscTargetIp: (ip: string) => void
   setOscTargetPort: (port: number) => void
+  setMidiClockEnabled: (enabled: boolean) => void
+  setMidiClockSource: (source: 'detected' | 'tapped' | 'manual') => void
+  setMidiClockManualBpm: (bpm: number) => void
+  setOscTemplate: (template: 'generic' | 'resolume' | 'disguise' | 'watchout') => void
   setVideoFile: (name: string | null, waveform: Float32Array | null, duration: number) => void
   setVideoOffsetSeconds: (offset: number) => void
   setVideoStartTimecode: (tc: string | null) => void
   setVideoLoading: (loading: boolean) => void
+  setAudioLoading: (loading: boolean, fileName?: string | null) => void
   setTimecodeLookup: (lookup: TimecodeLookupEntry[]) => void
   clearVideo: () => void
   addToSetlist: (items: Array<Omit<SetlistItem, 'id'> & { id?: string }>) => void
   removeFromSetlist: (index: number) => void
   setActiveSetlistIndex: (index: number | null) => void
+  setStandbySetlistIndex: (index: number | null) => void
   reorderSetlist: (from: number, to: number) => void
   clearSetlist: () => void
   undoClearSetlist: () => void
@@ -379,19 +420,22 @@ export interface AppState {
   setSetlistItemOffset: (index: number, offsetFrames: number | undefined) => void
   setSetlistItemNotes: (index: number, notes: string | undefined) => void
   setSetlistItemMidiCues: (index: number, cues: MidiCuePoint[]) => void
-  setRightTab: (tab: 'devices' | 'setlist' | 'cues' | 'structure') => void
+  setRightTab: (tab: 'devices' | 'setlist' | 'cues' | 'structure' | 'calc' | 'log') => void
   setLang: (lang: 'en' | 'zh' | 'ja') => void
   setShowLocked: (locked: boolean) => void
+  setUltraDark: (dark: boolean) => void
   setAutoAdvance: (enabled: boolean) => void
   // Waveform Markers (Sprint 4)
   addMarker: (filePath: string, marker: WaveformMarker) => void
   removeMarker: (filePath: string, markerId: string) => void
   updateMarker: (filePath: string, markerId: string, updates: Partial<WaveformMarker>) => void
   undoMarker: () => void
+  setWaveformZoom: (filePath: string, pxPerSec: number) => void
   // License
   setLicenseKey: (key: string | null) => void
   setLicenseStatus: (status: 'none' | 'valid' | 'expired' | 'invalid') => void
   setLicenseValidatedAt: (ts: number | null) => void
+  setLicenseExpiresAt: (expiresAt: string | null) => void
   isPro: () => boolean
   setAutoAdvanceGap: (gap: number) => void
   setSelectedCueMidiPort: (port: string | null) => void
@@ -460,6 +504,12 @@ export const useStore = create<AppState>()(persist((set) => ({
   oscTargetIp: '127.0.0.1',
   oscTargetPort: 8000,
 
+  midiClockEnabled: false,
+  midiClockSource: 'detected',
+  midiClockManualBpm: 120,
+
+  oscTemplate: 'generic',
+
   tappedBpm: null,
   detectedBpm: null,
 
@@ -470,10 +520,14 @@ export const useStore = create<AppState>()(persist((set) => ({
   videoStartTimecode: null,
   videoLoading: false,
 
+  audioLoading: false,
+  loadingFileName: null,
+
   timecodeLookup: [],
 
   setlist: [],
   activeSetlistIndex: null,
+  standbySetlistIndex: null,
   previousSetlist: null,
   autoAdvance: false,
   autoAdvanceGap: 2,
@@ -485,11 +539,14 @@ export const useStore = create<AppState>()(persist((set) => ({
 
   markers: {},
   markerUndoStack: [],
+  waveformZoom: {},
   showLocked: false,
+  ultraDark: false,
 
   licenseKey: null,
   licenseStatus: 'none',
   licenseValidatedAt: null,
+  licenseExpiresAt: null,
   trialDaysLeft: null,
 
   rightTab: 'devices',
@@ -559,6 +616,10 @@ export const useStore = create<AppState>()(persist((set) => ({
   setOscEnabled: (oscEnabled) => set({ oscEnabled, presetDirty: true }),
   setOscTargetIp: (oscTargetIp) => set({ oscTargetIp, presetDirty: true }),
   setOscTargetPort: (oscTargetPort) => set({ oscTargetPort, presetDirty: true }),
+  setMidiClockEnabled: (midiClockEnabled) => set({ midiClockEnabled, presetDirty: true }),
+  setMidiClockSource: (midiClockSource) => set({ midiClockSource, presetDirty: true }),
+  setMidiClockManualBpm: (midiClockManualBpm) => set({ midiClockManualBpm: Math.max(20, Math.min(300, midiClockManualBpm)), presetDirty: true }),
+  setOscTemplate: (oscTemplate) => set({ oscTemplate, presetDirty: true }),
   setTappedBpm: (tappedBpm) => set({ tappedBpm }),
   setDetectedBpm: (detectedBpm) => set({ detectedBpm }),
   setVideoFile: (videoFileName, videoWaveform, videoDuration) =>
@@ -566,6 +627,7 @@ export const useStore = create<AppState>()(persist((set) => ({
   setVideoOffsetSeconds: (videoOffsetSeconds) => set({ videoOffsetSeconds }),
   setVideoStartTimecode: (videoStartTimecode) => set({ videoStartTimecode }),
   setVideoLoading: (videoLoading) => set({ videoLoading }),
+  setAudioLoading: (loading, fileName) => set({ audioLoading: loading, loadingFileName: loading ? (fileName ?? null) : null }),
   setTimecodeLookup: (timecodeLookup) => set({ timecodeLookup }),
   clearVideo: () => set({
     videoFileName: null, videoWaveform: null, videoDuration: 0,
@@ -582,28 +644,37 @@ export const useStore = create<AppState>()(persist((set) => ({
     if (index < 0 || index >= s.setlist.length) return s
     const setlist = [...s.setlist]
     setlist.splice(index, 1)
-    const activeSetlistIndex = s.activeSetlistIndex === index
-      ? null
-      : s.activeSetlistIndex !== null && s.activeSetlistIndex > index
-        ? s.activeSetlistIndex - 1
-        : s.activeSetlistIndex
-    return { setlist, activeSetlistIndex, presetDirty: true }
+    const shift = (i: number | null): number | null =>
+      i === null ? null : i === index ? null : i > index ? i - 1 : i
+    return {
+      setlist,
+      activeSetlistIndex: shift(s.activeSetlistIndex),
+      standbySetlistIndex: shift(s.standbySetlistIndex),
+      presetDirty: true
+    }
   }),
   setActiveSetlistIndex: (activeSetlistIndex) => set({ activeSetlistIndex }),
+  setStandbySetlistIndex: (standbySetlistIndex) => set({ standbySetlistIndex }),
   reorderSetlist: (from, to) => set((s) => {
     if (from < 0 || from >= s.setlist.length || to < 0 || to >= s.setlist.length) return s
     if (from === to) return s
     const activeItem = s.activeSetlistIndex !== null ? s.setlist[s.activeSetlistIndex] : null
+    const standbyItem = s.standbySetlistIndex !== null ? s.setlist[s.standbySetlistIndex] : null
     const setlist = [...s.setlist]
     const [item] = setlist.splice(from, 1)
     setlist.splice(to, 0, item)
-    // Track active item by ID — immune to index arithmetic errors
-    let activeSetlistIndex: number | null = null
-    if (activeItem) {
-      activeSetlistIndex = setlist.findIndex(i => i.id === activeItem.id)
-      if (activeSetlistIndex === -1) activeSetlistIndex = null
+    // Track active + standby items by ID — immune to index arithmetic errors
+    const findId = (target: SetlistItem | null): number | null => {
+      if (!target) return null
+      const i = setlist.findIndex(it => it.id === target.id)
+      return i === -1 ? null : i
     }
-    return { setlist, activeSetlistIndex, presetDirty: true }
+    return {
+      setlist,
+      activeSetlistIndex: findId(activeItem),
+      standbySetlistIndex: findId(standbyItem),
+      presetDirty: true
+    }
   }),
   clearSetlist: () => {
     const s = useStore.getState()
@@ -619,6 +690,7 @@ export const useStore = create<AppState>()(persist((set) => ({
         previousSetlist: { setlist: current.setlist, activeIndex: current.activeSetlistIndex },
         setlist: [],
         activeSetlistIndex: null,
+        standbySetlistIndex: null,
         presetDirty: true
       })
     }).catch(() => {})
@@ -684,8 +756,9 @@ export const useStore = create<AppState>()(persist((set) => ({
   }),
   setSetlistItemNotes: (index: number, notes: string | undefined) => set((s) => {
     if (index < 0 || index >= s.setlist.length) return s
+    const capped = notes ? notes.slice(0, 500) : undefined
     const setlist = [...s.setlist]
-    setlist[index] = { ...setlist[index], notes: notes || undefined }
+    setlist[index] = { ...setlist[index], notes: capped || undefined }
     return { setlist, presetDirty: true }
   }),
   setSetlistItemMidiCues: (index: number, cues: MidiCuePoint[]) => set((s) => {
@@ -697,6 +770,7 @@ export const useStore = create<AppState>()(persist((set) => ({
   setRightTab: (rightTab) => set({ rightTab }),
   setLang: (lang) => set({ lang, presetDirty: true }),
   setShowLocked: (showLocked) => set({ showLocked, presetDirty: true }),
+  setUltraDark: (ultraDark) => set({ ultraDark }),
   setAutoAdvance: (autoAdvance) => set({ autoAdvance, presetDirty: true }),
   setAutoAdvanceGap: (autoAdvanceGap) => set({ autoAdvanceGap: Math.max(0, Math.min(30, autoAdvanceGap)), presetDirty: true }),
   setSelectedCueMidiPort: (selectedCueMidiPort) => set({ selectedCueMidiPort, presetDirty: true }),
@@ -747,14 +821,21 @@ export const useStore = create<AppState>()(persist((set) => ({
     }
   }),
 
+  setWaveformZoom: (filePath, pxPerSec) => set((s) => ({
+    waveformZoom: { ...s.waveformZoom, [filePath]: pxPerSec }
+  })),
+
   // License actions
   setLicenseKey: (licenseKey) => set({ licenseKey }),
   setLicenseStatus: (licenseStatus) => set({ licenseStatus }),
   setLicenseValidatedAt: (licenseValidatedAt) => set({ licenseValidatedAt }),
+  setLicenseExpiresAt: (licenseExpiresAt) => set({ licenseExpiresAt }),
   isPro: () => {
     const s = useStore.getState()
     // Licensed user — 30-day offline grace period (live events often have no internet)
     if (s.licenseStatus === 'valid') {
+      // Promo licenses: check hard expiry date first
+      if (s.licenseExpiresAt && new Date(s.licenseExpiresAt) < new Date()) return false
       // Must have a validation timestamp — reject if missing (corrupt/tampered state)
       if (!s.licenseValidatedAt) return false
       const daysSince = (Date.now() - s.licenseValidatedAt) / (1000 * 60 * 60 * 24)
@@ -821,7 +902,14 @@ export const useStore = create<AppState>()(persist((set) => ({
       oscEnabled: false,
       oscTargetIp: '127.0.0.1',
       oscTargetPort: 8000,
-      markers: {}
+      oscTemplate: 'generic',
+      midiClockEnabled: false,
+      midiClockSource: 'detected',
+      midiClockManualBpm: 120,
+      standbySetlistIndex: null,
+      showLocked: false,
+      markers: {},
+      waveformZoom: {}
     })
   },
 
@@ -975,6 +1063,7 @@ export const useStore = create<AppState>()(persist((set) => ({
       autoAdvance: false, autoAdvanceGap: 2,
       selectedCueMidiPort: null, midiInputPort: null, midiMappings: [],
       oscEnabled: false, oscTargetIp: '127.0.0.1', oscTargetPort: 8000,
+      midiClockEnabled: false, midiClockSource: 'detected', midiClockManualBpm: 120,
       markers: {}
     })
   },
@@ -1060,8 +1149,14 @@ export const useStore = create<AppState>()(persist((set) => ({
     oscEnabled: state.oscEnabled,
     oscTargetIp: state.oscTargetIp,
     oscTargetPort: state.oscTargetPort,
+    oscTemplate: state.oscTemplate,
+    midiClockEnabled: state.midiClockEnabled,
+    midiClockSource: state.midiClockSource,
+    midiClockManualBpm: state.midiClockManualBpm,
     markers: state.markers,
+    waveformZoom: state.waveformZoom,
     showLocked: state.showLocked,
+    ultraDark: state.ultraDark,
     presetPath: state.presetPath,
     presetName: state.presetName,
     // Crash recovery: persist last played file so we can restore on relaunch
@@ -1072,6 +1167,7 @@ export const useStore = create<AppState>()(persist((set) => ({
     licenseKey: state.licenseKey,
     licenseStatus: state.licenseStatus,
     licenseValidatedAt: state.licenseValidatedAt,
+    licenseExpiresAt: state.licenseExpiresAt,
   }),
   merge: (persisted, current) => {
     if (!persisted || typeof persisted !== 'object') return current
@@ -1081,8 +1177,11 @@ export const useStore = create<AppState>()(persist((set) => ({
     if (typeof merged.lang !== 'string') merged.lang = current.lang
     if (typeof merged.offsetFrames !== 'number' || !isFinite(merged.offsetFrames)) merged.offsetFrames = current.offsetFrames
     if (typeof merged.generatorFps !== 'number' || merged.generatorFps <= 0) merged.generatorFps = current.generatorFps
-    if (!Array.isArray(merged.midiCues)) merged.midiCues = current.midiCues ?? []
-    if (!Array.isArray(merged.waveformMarkers)) merged.waveformMarkers = current.waveformMarkers ?? []
+    if (!Array.isArray(merged.midiMappings)) merged.midiMappings = current.midiMappings ?? []
+    if (typeof merged.markers !== 'object' || merged.markers === null) merged.markers = current.markers ?? {}
+    if (typeof merged.waveformZoom !== 'object' || merged.waveformZoom === null) merged.waveformZoom = {}
+    // Validate license expiry (prevent NaN display from corrupted data)
+    if (merged.licenseExpiresAt && isNaN(new Date(merged.licenseExpiresAt).getTime())) merged.licenseExpiresAt = null
     // Ensure setlist items from old storage have IDs
     merged.setlist = merged.setlist.map((item: SetlistItem) =>
       item.id ? item : { ...item, id: nextSetlistId() }

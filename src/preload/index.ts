@@ -21,9 +21,14 @@ contextBridge.exposeInMainWorld('api', {
   licenseDeactivate: (key: string) => ipcRenderer.invoke('license-deactivate', key),
   licenseValidate: (key: string) => ipcRenderer.invoke('license-validate', key),
   licenseStatus: (key: string) => ipcRenderer.invoke('license-status', key),
+  // Authoritative Pro check (main process with safeStorage-encrypted state)
+  isPro: () => ipcRenderer.invoke('is-pro') as Promise<{ isPro: boolean; reason: string }>,
 
   // Trial
   trialCheck: () => ipcRenderer.invoke('trial-check'),
+
+  // Promo code redemption
+  promoRedeem: (code: string, email: string) => ipcRenderer.invoke('promo-redeem', code, email),
 
   // Preset / project management (filesystem-based)
   getLTCastPath: () => ipcRenderer.invoke('get-ltcast-path'),
@@ -76,6 +81,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.send('osc-send-transport', state, targetIp, port),
   oscSendSong: (name: string, index: number, targetIp: string, port: number) =>
     ipcRenderer.send('osc-send-song', name, index, targetIp, port),
+  oscSendTcCustom: (address: string, tcString: string, fps: number, targetIp: string, port: number) =>
+    ipcRenderer.send('osc-send-tc-custom', address, tcString, fps, targetIp, port),
 
   // Menu command listeners
   onMenuCommand: (channel: string, callback: (...args: unknown[]) => void) => {
@@ -102,6 +109,15 @@ contextBridge.exposeInMainWorld('api', {
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowMaximize: () => ipcRenderer.invoke('window:maximize'),
   windowClose: () => ipcRenderer.invoke('window:close'),
+
+  // Open URL in default browser / email client
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+
+  // PDF export (Chromium printToPDF — supports CJK)
+  printToPdf: (html: string, defaultName: string) => ipcRenderer.invoke('print-to-pdf', html, defaultName),
+
+  // Clipboard
+  copyToClipboard: (text: string) => ipcRenderer.invoke('clipboard-write', text),
 
   // Platform detection (for platform-specific UI text)
   platform: process.platform

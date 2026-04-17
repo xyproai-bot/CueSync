@@ -14,6 +14,8 @@ function fpsToRateCode(fps: number): number {
   return 3
 }
 
+export type MidiClockSource = 'detected' | 'tapped' | 'manual'
+
 export class MtcOutput {
   private midiAccess: MIDIAccess | null = null
   private selectedOutput: MIDIOutput | null = null
@@ -21,11 +23,18 @@ export class MtcOutput {
   private lastSentFrame = -1
   private mtcMode: MtcMode = 'quarter-frame'
   private lastQfPiece = -1  // tracks which quarter-frame piece (0-7) was last sent
+  private _qfNibbleCache: number[] | null = null  // MTC spec: all 8 pieces encode the TC at piece 0's moment — cached to avoid mid-cycle TC drift
   private _perfNowAtPlayStart = 0
   private _audioTimeAtPlayStart = 0
   private _lastQfTimestamp = 0  // chained timestamp of the last QF sent (ms, performance.now() scale)
   onPortsChanged: (() => void) | null = null
   onPortDisconnected: ((portName: string) => void) | null = null
+
+  // ── MIDI Clock state ──────────────────────────────────────
+  private _clockRunning = false
+  private _clockBpm = 0
+  private _clockTimerId: ReturnType<typeof setTimeout> | null = null
+  private _lastClockTimestamp = 0  // chained timestamp (ms, performance.now() scale)
 
   async init(): Promise<void> {
     if (!navigator.requestMIDIAccess) throw new Error('Web MIDI API not supported')
@@ -34,11 +43,17 @@ export class MtcOutput {
       const port = e.port
       // If the disconnected port is the one we're using, notify
       if (port && port.state === 'disconnected' && this.selectedOutput?.id === port.id) {
+        if (this._clockRunning) this.stopClock()
         const name = this.selectedOutput.name || port.id
         this.selectedOutput = null
         this.lastSentFrame = -1
         this.lastQfPiece = -1
+        this._qfNibbleCache = null
         this.onPortDisconnected?.(name)
+      }
+      // Also handle cue port disconnect (previously unchecked)
+      if (port && port.state === 'disconnected' && this.cueOutput?.id === port.id) {
+        this.cueOutput = null
       }
       this.onPortsChanged?.()
     }
@@ -65,6 +80,7 @@ export class MtcOutput {
   }
 
   deselectPort(): void {
+    if (this._clockRunning) this.stopClock()
     this.selectedOutput = null
     this.lastSentFrame = -1
     this.lastQfPiece = -1
@@ -106,10 +122,13 @@ export class MtcOutput {
     if (!this.cueOutput) return
     try {
       const ch = (channel - 1) & 0x0F
-      this.cueOutput.send([0x90 | ch, note & 0x7F, velocity & 0x7F])
-      // Auto Note Off after 100ms
+      // Capture port reference at send time — if cueOutput is reassigned before
+      // the auto-note-off fires, the closure should still target the original
+      // port (otherwise the original device keeps a stuck note)
+      const port = this.cueOutput
+      port.send([0x90 | ch, note & 0x7F, velocity & 0x7F])
       setTimeout(() => {
-        try { this.cueOutput?.send([0x80 | ch, note & 0x7F, 0]) } catch { /* ignore */ }
+        try { port.send([0x80 | ch, note & 0x7F, 0]) } catch { /* ignore */ }
       }, 100)
     } catch { /* port may have gone away */ }
   }
@@ -119,6 +138,105 @@ export class MtcOutput {
     try {
       this.cueOutput.send([0xB0 | ((channel - 1) & 0x0F), cc & 0x7F, value & 0x7F])
     } catch { /* port may have gone away */ }
+  }
+
+  /**
+   * Send MIDI CC on BOTH the MTC port and cue port (if connected).
+   * Used for PANIC — ensures All Notes Off reaches every downstream device
+   * regardless of which port the user routed to.
+   */
+  sendControlChangeBroadcast(channel: number, cc: number, value: number): void {
+    const data = [0xB0 | ((channel - 1) & 0x0F), cc & 0x7F, value & 0x7F]
+    try { this.selectedOutput?.send(data) } catch { /* port gone */ }
+    try { this.cueOutput?.send(data) } catch { /* port gone */ }
+  }
+
+  // ── MIDI Clock Output (24 PPQ) ─────────────────────────────
+
+  /**
+   * Start sending MIDI Clock.
+   * Sends 0xFA (Start), then begins 0xF8 ticks at 24 PPQ.
+   * Uses chained timestamps for jitter-free spacing (same strategy as MTC QF).
+   */
+  startClock(bpm: number): void {
+    if (!this.selectedOutput || bpm <= 0) return
+    if (this._clockRunning) this.stopClock()
+    this._clockBpm = bpm
+    this._clockRunning = true
+    // Send MIDI Start (0xFA)
+    try { this.selectedOutput.send([0xfa]) } catch { /* port gone */ }
+    this._lastClockTimestamp = performance.now()
+    this._scheduleClockBatch()
+  }
+
+  /**
+   * Stop sending MIDI Clock.
+   * Sends 0xFC (Stop), cancels pending ticks, and attempts to clear the
+   * Web MIDI output queue so orphan ticks scheduled with future timestamps
+   * don't fire AFTER 0xFC (which would cause downstream devices to lose sync
+   * on rapid stop→start cycles).
+   */
+  stopClock(): void {
+    this._clockRunning = false
+    if (this._clockTimerId !== null) {
+      clearTimeout(this._clockTimerId)
+      this._clockTimerId = null
+    }
+    if (!this.selectedOutput) return
+    // Cancel any pending scheduled ticks (Chrome 87+ supports clear())
+    try {
+      (this.selectedOutput as unknown as { clear?: () => void }).clear?.()
+    } catch { /* older browsers / polyfill gap */ }
+    try { this.selectedOutput.send([0xfc]) } catch { /* port gone */ }
+  }
+
+  /**
+   * Update clock BPM on the fly without interrupting the tick stream.
+   * The new interval takes effect on the next scheduling batch.
+   */
+  updateClockBpm(bpm: number): void {
+    if (bpm <= 0) {
+      this.stopClock()
+      return
+    }
+    this._clockBpm = bpm
+  }
+
+  isClockRunning(): boolean { return this._clockRunning }
+  getClockBpm(): number { return this._clockBpm }
+
+  /**
+   * Schedule a batch of 24 MIDI Clock ticks (one beat) using Web MIDI timestamps.
+   * Each tick is chained from the previous one's timestamp, so JS event-loop
+   * jitter does not affect tick spacing — only the absolute position.
+   * After sending 24 ticks, schedules the next batch near the end of this beat.
+   */
+  private _scheduleClockBatch(): void {
+    if (!this._clockRunning || !this.selectedOutput || this._clockBpm <= 0) return
+
+    const tickIntervalMs = 60000 / (this._clockBpm * 24)
+    const TICKS_PER_BATCH = 24  // one beat
+
+    try {
+      for (let i = 0; i < TICKS_PER_BATCH; i++) {
+        this._lastClockTimestamp += tickIntervalMs
+        this.selectedOutput!.send([0xf8], this._lastClockTimestamp)
+      }
+    } catch {
+      // Port disconnected — stop clock
+      this._clockRunning = false
+      return
+    }
+
+    // Schedule next batch slightly before the last tick fires.
+    // beatDurationMs = 24 * tickIntervalMs, but we wake up ~80% through
+    // to avoid missing the window while keeping batches smooth.
+    const beatMs = TICKS_PER_BATCH * tickIntervalMs
+    const wakeupMs = Math.max(1, beatMs * 0.8)
+    this._clockTimerId = setTimeout(() => {
+      this._clockTimerId = null
+      this._scheduleClockBatch()
+    }, wakeupMs)
   }
 
   isConnected(): boolean {
@@ -224,20 +342,35 @@ export class MtcOutput {
       this._lastQfTimestamp = anchorPerfTime
     }
 
+    // Guard against scheduling in the past after GC or long main-thread stall:
+    // Chrome silently drops past timestamps, which would cause piece gaps
+    const nowPerf = performance.now()
+    if (this._lastQfTimestamp < nowPerf) {
+      this._lastQfTimestamp = nowPerf + 1
+    }
+
     // Send 4 pieces, each chained exactly qfIntervalMs from the previous.
-    // JS event-loop jitter does NOT affect spacing — only the absolute position.
+    // MTC spec: ALL 8 pieces in a cycle must encode the TC at piece 0's moment
+    // (receiver reconstructs TC upon receiving piece 7, compensating for the 2-frame
+    // transmission delay). If we used the current TC for every call, pieces 4-7 would
+    // encode N+1's value while receiver expects N's → 2-frame display offset.
+    // Fix: cache nibbles when piece 0 is emitted, reuse for pieces 1-7.
     try {
       for (let i = 0; i < 4; i++) {
         this._lastQfTimestamp += qfIntervalMs
         this.lastQfPiece = (this.lastQfPiece + 1) % 8
         const piece = this.lastQfPiece
-        this.selectedOutput!.send([0xf1, (piece << 4) | nibbles[piece]], this._lastQfTimestamp)
+        if (piece === 0 || this._qfNibbleCache === null) {
+          this._qfNibbleCache = nibbles
+        }
+        this.selectedOutput!.send([0xf1, (piece << 4) | this._qfNibbleCache[piece]], this._lastQfTimestamp)
       }
     } catch {
       const name = this.selectedOutput?.name ?? 'Unknown'
       this.selectedOutput = null
       this.lastSentFrame = -1
       this.lastQfPiece = -1
+      this._qfNibbleCache = null
       this._lastQfTimestamp = 0
       this.onPortDisconnected?.(name)
     }

@@ -24,6 +24,9 @@ class LTCProcessor extends AudioWorkletProcessor {
     this.sigMin = -0.001
     this.prevState = 0
     this.samplesSinceCrossing = 0
+    // Decay constant: ~100ms time constant, independent of sample rate
+    // At 48kHz: 0.9998 → τ ≈ 96ms. At 96kHz the old hardcoded 0.9998 → τ ≈ 192ms (too slow).
+    this.envelopeDecay = Math.exp(-1 / (sampleRate * 0.1))
 
     // Biphase mark decoding
     this.avgHalfBit = sampleRate / (25 * 80 * 2) // initial guess: 25fps
@@ -60,11 +63,12 @@ class LTCProcessor extends AudioWorkletProcessor {
       this.samplesSinceCrossing++
 
       // ── Adaptive envelope tracking ──
+      // Decay rate is sample-rate-independent: ~100ms time constant
       if (sample > this.sigMax) this.sigMax = sample
-      else this.sigMax *= 0.9998
+      else this.sigMax *= this.envelopeDecay
 
       if (sample < this.sigMin) this.sigMin = sample
-      else this.sigMin *= 0.9998
+      else this.sigMin *= this.envelopeDecay
 
       // Threshold at midpoint of envelope
       const threshold = (this.sigMax + this.sigMin) * 0.5
@@ -169,7 +173,7 @@ class LTCProcessor extends AudioWorkletProcessor {
     if (hoursUnits > 9 || hoursTens > 2) return
     if (seconds > 59 || minutes > 59 || hours > 23) return
 
-    const rawFps = this._detectFps()
+    const rawFps = this._detectFps(dropFrame)
 
     // FPS hysteresis: require consecutive agreement before committing to a new FPS.
     // This prevents 29.97↔30 jitter when avgHalfBit fluctuates near the boundary.
@@ -201,7 +205,7 @@ class LTCProcessor extends AudioWorkletProcessor {
     this.framesDecoded++
   }
 
-  _detectFps() {
+  _detectFps(dropFrameBit) {
     const raw = sampleRate / (this.avgHalfBit * 2 * 80)
     const standards = [24, 25, 29.97, 30]
     let best = raw, bestDist = Infinity
@@ -209,8 +213,14 @@ class LTCProcessor extends AudioWorkletProcessor {
       const d = Math.abs(raw - std)
       if (d < bestDist) { bestDist = d; best = std }
     }
-    if (bestDist < 2) return best
-    return Math.round(raw * 10) / 10
+    if (bestDist >= 2) return Math.round(raw * 10) / 10
+    // Use the decoded drop-frame bit as the primary disambiguator between
+    // 29.97 DF and 30 NDF — their bit rates are only 0.1% apart and
+    // avgHalfBit jitter causes frequent misclassification without this.
+    if (best === 29.97 || best === 30) {
+      return dropFrameBit === 1 ? 29.97 : 30
+    }
+    return best
   }
 }
 

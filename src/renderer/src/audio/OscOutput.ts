@@ -1,4 +1,13 @@
-import { TimecodeFrame } from '../store'
+import { TimecodeFrame, useStore } from '../store'
+
+type OscTemplate = 'generic' | 'resolume' | 'disguise' | 'watchout'
+
+const TEMPLATE_CONFIG: Record<OscTemplate, { address: string; useString: boolean }> = {
+  generic:  { address: '/timecode',                     useString: false },
+  resolume: { address: '/composition/tempocontroller/timecode', useString: true },
+  disguise: { address: '/d3/showcontrol/timecode',      useString: true },
+  watchout: { address: '/watchout/timecode',            useString: true },
+}
 
 /**
  * OSC Output — sends timecode and transport state via OSC/UDP.
@@ -53,10 +62,19 @@ export class OscOutput {
     if (key === this.lastSentFrame) return
     this.lastSentFrame = key
 
-    window.api.oscSendTc(
-      tc.hours, tc.minutes, tc.seconds, tc.frames,
-      Math.round(tc.fps), this.targetIp, this.targetPort
-    )
+    const template = useStore.getState().oscTemplate || 'generic'
+    const cfg = TEMPLATE_CONFIG[template]
+
+    if (cfg.useString) {
+      const pad = (n: number): string => String(n).padStart(2, '0')
+      const tcStr = `${pad(tc.hours)}:${pad(tc.minutes)}:${pad(tc.seconds)}:${pad(tc.frames)}`
+      window.api.oscSendTcCustom(cfg.address, tcStr, tc.fps, this.targetIp, this.targetPort)
+    } else {
+      window.api.oscSendTc(
+        tc.hours, tc.minutes, tc.seconds, tc.frames,
+        Math.round(tc.fps), this.targetIp, this.targetPort
+      )
+    }
   }
 
   sendTransport(state: 'play' | 'pause' | 'stop'): void {

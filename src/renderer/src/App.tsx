@@ -11,6 +11,8 @@ import { DevicePanel } from './components/DevicePanel'
 import { SetlistPanel } from './components/SetlistPanel'
 import { MidiCuePanel } from './components/MidiCuePanel'
 import { StructurePanel } from './components/StructurePanel'
+import { TcCalcPanel } from './components/TcCalcPanel'
+import { ShowLogPanel } from './components/ShowLogPanel'
 import { PresetBar } from './components/PresetBar'
 import { TapBpm } from './components/TapBpm'
 import { StatusBar } from './components/StatusBar'
@@ -18,12 +20,14 @@ import { LtcWavExportDialog } from './components/LtcWavExportDialog'
 import { LicenseDialog } from './components/LicenseDialog'
 import { ProGate } from './components/ProGate'
 import { useStore, TimecodeFrame } from './store'
+import { useShallow } from 'zustand/react/shallow'
 import { alignAudio } from './audio/AudioAligner'
 import { getTimecodeAtTime, formatTimecode } from './audio/LtcDecoder'
 import { tcToFrames } from './audio/timecodeConvert'
 import { detectBpmAt } from './audio/BpmDetector'
 import { t } from './i18n'
 import { toast } from './components/Toast'
+import { showLog } from './utils/showLog'
 import { LTC_CONFIDENCE_THRESHOLD } from './constants'
 
 export default function App(): React.JSX.Element {
@@ -61,6 +65,8 @@ export default function App(): React.JSX.Element {
   // MIDI activity indicator
   const [midiActivity, setMidiActivity] = useState(false)
   const midiActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [lastFiredCueId, setLastFiredCueId] = useState<string | null>(null)
+  const cueFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Cancel any pending auto-advance countdown
   const cancelAutoAdvance = useCallback((): void => {
@@ -69,6 +75,11 @@ export default function App(): React.JSX.Element {
     setAutoAdvanceCountdown(null)
   }, [])
 
+  // NARROW SELECTOR with useShallow — prevents App from re-rendering on every
+  // setCurrentTime (30Hz) and setTimecode (30Hz). Previously App subscribed to
+  // the WHOLE store via useStore() with no selector, causing the entire App
+  // tree to re-render 30×/sec during playback. Now it only re-renders when
+  // one of THESE specific fields changes.
   const {
     filePath, fileName, presetName, presetDirty, lang, loop,
     setFilePath, setPlayState, setCurrentTime,
@@ -90,13 +101,48 @@ export default function App(): React.JSX.Element {
     selectedCueMidiPort, setSelectedCueMidiPort,
     midiInputPort, setMidiInputPort,
     midiMappings, updateMidiMapping,
-    trialDaysLeft, isPro, savePreset
-  } = useStore()
+    trialDaysLeft, isPro, savePreset,
+    audioLoading, loadingFileName, setAudioLoading
+  } = useStore(useShallow((s) => ({
+    filePath: s.filePath, fileName: s.fileName, presetName: s.presetName,
+    presetDirty: s.presetDirty, lang: s.lang, loop: s.loop,
+    setFilePath: s.setFilePath, setPlayState: s.setPlayState, setCurrentTime: s.setCurrentTime,
+    setTimecode: s.setTimecode, setDetectedFps: s.setDetectedFps, setLtcSignalOk: s.setLtcSignalOk,
+    setDetectedLtcChannel: s.setDetectedLtcChannel, setMidiConnected: s.setMidiConnected, setMidiOutputs: s.setMidiOutputs,
+    setTimecodeLookup: s.setTimecodeLookup, setVideoFile: s.setVideoFile, setVideoOffsetSeconds: s.setVideoOffsetSeconds,
+    setVideoStartTimecode: s.setVideoStartTimecode, setVideoLoading: s.setVideoLoading, clearVideo: s.clearVideo,
+    offsetFrames: s.offsetFrames, loopA: s.loopA, loopB: s.loopB,
+    tcGeneratorMode: s.tcGeneratorMode, setTcGeneratorMode: s.setTcGeneratorMode,
+    generatorStartTC: s.generatorStartTC, generatorFps: s.generatorFps,
+    forceFps: s.forceFps,
+    ltcChannel: s.ltcChannel,
+    ltcSignalOk: s.ltcSignalOk, ltcConfidence: s.ltcConfidence, detectedLtcChannel: s.detectedLtcChannel,
+    setLtcConfidence: s.setLtcConfidence, setDetectedBpm: s.setDetectedBpm,
+    artnetEnabled: s.artnetEnabled, artnetTargetIp: s.artnetTargetIp,
+    oscEnabled: s.oscEnabled, oscTargetIp: s.oscTargetIp, oscTargetPort: s.oscTargetPort,
+    setSelectedMidiPort: s.setSelectedMidiPort,
+    rightTab: s.rightTab, setMidiInputs: s.setMidiInputs, showLocked: s.showLocked, setShowLocked: s.setShowLocked,
+    selectedCueMidiPort: s.selectedCueMidiPort, setSelectedCueMidiPort: s.setSelectedCueMidiPort,
+    midiInputPort: s.midiInputPort, setMidiInputPort: s.setMidiInputPort,
+    midiMappings: s.midiMappings, updateMidiMapping: s.updateMidiMapping,
+    trialDaysLeft: s.trialDaysLeft, isPro: s.isPro, savePreset: s.savePreset,
+    audioLoading: s.audioLoading, loadingFileName: s.loadingFileName, setAudioLoading: s.setAudioLoading
+  })))
 
   // Sync window title bar with preset name
   useEffect(() => {
     document.title = presetName ? `LTCast - ${presetName}` : 'LTCast'
   }, [presetName])
+
+  // Sync ultra-dark body class with store state
+  useEffect(() => {
+    const unsub = useStore.subscribe(
+      (s, prev) => { if (s.ultraDark !== prev.ultraDark) document.body.classList.toggle('ultra-dark', s.ultraDark) }
+    )
+    // Apply on mount
+    document.body.classList.toggle('ultra-dark', useStore.getState().ultraDark)
+    return unsub
+  }, [])
 
   // Handle .ltcast file opened via double-click / OS association
   useEffect(() => {
@@ -181,6 +227,9 @@ export default function App(): React.JSX.Element {
 
   // Init engine + MIDI once
   useEffect(() => {
+    // Guard against React StrictMode double-mount in dev — don't recreate
+    // the engine if it already exists (prevents orphaned AudioContext leaks)
+    if (engine.current) return
     engine.current = new AudioEngine({
       onTimecode: handleTimecode,
       onTimeUpdate: (t) => {
@@ -194,6 +243,10 @@ export default function App(): React.JSX.Element {
             const musicCh = engine.current?.getMusicChannelIndex() ?? 0
             const bpm = detectBpmAt(buf, musicCh, t)
             useStore.getState().setDetectedBpm(bpm)
+            // Live-update MIDI Clock BPM if source is 'detected'
+            if (bpm && mtc.current?.isClockRunning() && useStore.getState().midiClockSource === 'detected') {
+              mtc.current.updateClockBpm(bpm)
+            }
           }
         }
       },
@@ -466,6 +519,7 @@ export default function App(): React.JSX.Element {
     return () => {
       clearInterval(autoSaveInterval)
       if (midiActivityTimer.current) { clearTimeout(midiActivityTimer.current); midiActivityTimer.current = null }
+      if (cueFlashTimer.current) { clearTimeout(cueFlashTimer.current); cueFlashTimer.current = null }
       if (autoAdvanceTimer.current) { clearTimeout(autoAdvanceTimer.current); autoAdvanceTimer.current = null }
       if (autoAdvanceIntervalRef.current) { clearInterval(autoAdvanceIntervalRef.current); autoAdvanceIntervalRef.current = null }
       window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -550,42 +604,8 @@ export default function App(): React.JSX.Element {
     return unsub
   }, [forceFps])
 
-  // LTC signal-lost prompt: offer one-click switch to Generator mode
-  useEffect(() => {
-    const s = useStore.getState()
-    if (!ltcSignalOk && s.playState === 'playing' && !s.tcGeneratorMode) {
-      if (!signalLostToastShown.current) {
-        signalLostToastShown.current = true
-        signalLostToastId.current = toast.action(
-          t(s.lang, 'ltcSignalLostPrompt'),
-          t(s.lang, 'switchToGenerator'),
-          () => {
-            const cur = useStore.getState()
-            // Relay from last known timecode position (don't jump to 0)
-            const lastTc = cur.timecode
-            if (lastTc) {
-              const startTc = [lastTc.hours, lastTc.minutes, lastTc.seconds, lastTc.frames]
-                .map(n => String(n).padStart(2, '0')).join(':')
-              cur.setGeneratorStartTC(startTc)
-              cur.setGeneratorFps(lastTc.fps)
-              engine.current?.setGeneratorStartTC(startTc, lastTc.fps)
-            }
-            cur.setTcGeneratorMode(true)
-            engine.current?.setGeneratorMode(true)
-          },
-          'warning'
-        )
-      }
-    }
-    // Signal restored: reset and dismiss toast
-    if (ltcSignalOk) {
-      signalLostToastShown.current = false
-      if (signalLostToastId.current !== null) {
-        toast.dismiss(signalLostToastId.current)
-        signalLostToastId.current = null
-      }
-    }
-  }, [ltcSignalOk])
+  // LTC signal-lost: no longer uses toast (caused layout jitter).
+  // Signal status is shown in StatusBar instead.
 
   // Sync manual LTC channel override to engine
   // When switching back to 'auto', restore the auto-detected channel index
@@ -629,6 +649,43 @@ export default function App(): React.JSX.Element {
     osc.current?.setTargetPort(oscTargetPort)
   }, [oscTargetPort])
 
+  // Sync MIDI Clock: react to settings or playState changes.
+  // Handles play/pause/stop from any source (transport, remote, MIDI input, setlist).
+  useEffect(() => {
+    const unsub = useStore.subscribe((s, prev) => {
+      if (!mtc.current?.isConnected()) return
+      const relevant =
+        s.midiClockEnabled !== prev.midiClockEnabled ||
+        s.midiClockSource !== prev.midiClockSource ||
+        s.midiClockManualBpm !== prev.midiClockManualBpm ||
+        s.tappedBpm !== prev.tappedBpm ||
+        s.detectedBpm !== prev.detectedBpm ||  // missed: auto-detected BPM first appearing
+        s.midiConnected !== prev.midiConnected ||  // missed: port selected mid-playback
+        s.playState !== prev.playState
+
+      if (!relevant) return
+
+      if (s.playState === 'playing' && s.midiClockEnabled) {
+        const bpm =
+          s.midiClockSource === 'manual' ? s.midiClockManualBpm :
+          s.midiClockSource === 'tapped' ? (s.tappedBpm ?? 0) :
+          (s.detectedBpm ?? 0)
+        if (bpm > 0) {
+          if (mtc.current!.isClockRunning()) {
+            mtc.current!.updateClockBpm(bpm)
+          } else {
+            mtc.current!.startClock(bpm)
+          }
+        } else if (mtc.current!.isClockRunning()) {
+          mtc.current!.stopClock()
+        }
+      } else if (mtc.current?.isClockRunning()) {
+        mtc.current.stopClock()
+      }
+    })
+    return unsub
+  }, [])
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -649,11 +706,35 @@ export default function App(): React.JSX.Element {
         if (e.code !== 'Space' && e.code !== 'Escape' && e.code !== 'F11') return
       }
 
-      // Space: play/pause
+      // Space: GO (standby → load+play) or play/pause toggle
       if (e.code === 'Space') {
         e.preventDefault()
         cancelAutoAdvance()
         const state = useStore.getState()
+
+        // Standby/GO: if a song is on standby, load AND start playback.
+        // openFile() only loads — we must explicitly play() once loading is done,
+        // otherwise GO appears to do nothing (song loaded but silent).
+        if (state.standbySetlistIndex !== null && state.playState !== 'playing') {
+          const idx = state.standbySetlistIndex
+          const item = state.setlist[idx]
+          if (item) {
+            state.setStandbySetlistIndex(null)
+            state.setActiveSetlistIndex(idx)
+            openFile(item.path, item.offsetFrames).then(() => {
+              const s = useStore.getState()
+              if (s.duration > 0) {
+                s.setPlayState('playing')
+                engine.current?.play().then(() => {
+                  const tc = useStore.getState().timecode
+                  if (tc) mtc.current?.sendFullFrame(tc)
+                }).catch(() => s.setPlayState('paused'))
+              }
+            })
+          }
+          return
+        }
+
         if (!state.duration) return
         if (state.playState === 'playing') {
           engine.current?.pause()
@@ -767,6 +848,18 @@ export default function App(): React.JSX.Element {
           }
         }
       }
+      // Number keys 1-9: quick jump to setlist song
+      if (e.code >= 'Digit1' && e.code <= 'Digit9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const state = useStore.getState()
+        if (state.setlist.length === 0) return
+        const idx = parseInt(e.code.charAt(5)) - 1 // Digit1 → 0, Digit9 → 8
+        if (idx < state.setlist.length) {
+          e.preventDefault()
+          state.setActiveSetlistIndex(idx)
+          const item = state.setlist[idx]
+          openFile(item.path, item.offsetFrames)
+        }
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -796,6 +889,11 @@ export default function App(): React.JSX.Element {
           const cueFrames = tcToFrames(cue.triggerTimecode, tc.fps) + (cue.offsetFrames ?? 0)
           if (cueFrames <= currentFrames) {
             triggeredCueIds.current.add(cue.id)
+            showLog.log('cue', `${cue.messageType} ch${cue.channel} #${cue.data1}${cue.label ? ` "${cue.label}"` : ''} @ ${cue.triggerTimecode}`)
+            // Visual feedback: flash the cue row
+            setLastFiredCueId(cue.id)
+            if (cueFlashTimer.current) clearTimeout(cueFlashTimer.current)
+            cueFlashTimer.current = setTimeout(() => setLastFiredCueId(null), 500)
             // Fire the cue
             if (cue.messageType === 'program-change') {
               mtc.current?.sendProgramChange(cue.channel, cue.data1)
@@ -890,6 +988,8 @@ export default function App(): React.JSX.Element {
     clearVideo()
 
     const name = filePath_.split(/[/\\]/).pop() ?? filePath_
+    setAudioLoading(true, name)
+    showLog.log('file', `Loading: ${name}`)
 
     try {
       const arrayBuffer = await window.api.readAudioFile(filePath_)
@@ -916,6 +1016,8 @@ export default function App(): React.JSX.Element {
     } catch (e) {
       setFilePath(null, null, 0)  // clear stale file state so UI doesn't show old file as loaded
       toast.error(`${t(useStore.getState().lang, 'loadFailed')}: ${e}`)
+    } finally {
+      setAudioLoading(false)
     }
   }
 
@@ -1088,6 +1190,7 @@ export default function App(): React.JSX.Element {
     cancelAutoAdvance()
     setPlayState('playing')
     osc.current?.sendTransport('play')
+    showLog.log('transport', 'Play')
     engine.current?.play().then(() => {
       const tc = useStore.getState().timecode
       if (tc) mtc.current?.sendFullFrame(tc)
@@ -1101,6 +1204,7 @@ export default function App(): React.JSX.Element {
     engine.current?.pause()
     setPlayState('paused')
     osc.current?.sendTransport('pause')
+    showLog.log('transport', 'Pause')
   }
 
   const handleStop = (): void => {
@@ -1111,6 +1215,34 @@ export default function App(): React.JSX.Element {
     setTimecode(null)
     triggeredCueIds.current = new Set()
     osc.current?.sendTransport('stop')
+    showLog.log('transport', 'Stop')
+  }
+
+  const handlePanic = (): void => {
+    showLog.log('transport', 'PANIC — all outputs stopped')
+    const s = useStore.getState()
+    // Clear standby so next Space press does not fire a stale song
+    s.setStandbySetlistIndex(null)
+    // Stop playback
+    handleStop()
+    // Send MIDI All Notes Off + All Sound Off on ALL 16 channels,
+    // broadcasting to both MTC and cue ports (whichever is connected)
+    if (mtc.current) {
+      for (let ch = 0; ch < 16; ch++) {
+        mtc.current.sendControlChangeBroadcast(ch + 1, 123, 0) // All Notes Off
+        mtc.current.sendControlChangeBroadcast(ch + 1, 120, 0) // All Sound Off
+      }
+    }
+    // Stop MIDI Clock if running
+    if (mtc.current?.isClockRunning()) mtc.current.stopClock()
+    // Build zero TC using the current show's fps/dropFrame (not hardcoded 25)
+    const curFps = s.timecode?.fps ?? s.forceFps ?? s.detectedFps ?? s.generatorFps ?? 25
+    const curDf = s.timecode?.dropFrame ?? false
+    const zeroTc = { hours: 0, minutes: 0, seconds: 0, frames: 0, fps: curFps, dropFrame: curDf }
+    // Send zero to all protocols
+    mtc.current?.sendFullFrame(zeroTc)
+    artnet.current?.sendTimecode(zeroTc)
+    osc.current?.sendTimecode(zeroTc)
   }
 
   const handleSeek = async (time: number): Promise<void> => {
@@ -1212,8 +1344,13 @@ export default function App(): React.JSX.Element {
               Trial Expired
             </button>
           )}
+          {!isPro() && trialDaysLeft === null && (
+            <button className="title-bar-trial" onClick={() => setShowLicenseDialog(true)}>
+              License
+            </button>
+          )}
           {isPro() && (
-            <span className="title-bar-pro">PRO</span>
+            <button className="title-bar-pro" onClick={() => setShowLicenseDialog(true)}>PRO</button>
           )}
           {/* Window controls — Windows only (Mac uses native traffic lights) */}
           {window.api.platform === 'win32' && (
@@ -1290,9 +1427,31 @@ export default function App(): React.JSX.Element {
             </div>
           </div>
 
-          <TimecodeDisplay />
+          <TimecodeDisplay onSeekToTimecode={(tcStr) => {
+            const s = useStore.getState()
+            const fps = s.timecode?.fps ?? s.forceFps ?? s.detectedFps ?? s.generatorFps ?? 25
+            const targetFrames = tcToFrames(tcStr, fps)
+            // Compute delta from current TC → new TC, apply to current audio time.
+            // This respects the file's TC start offset (e.g., LTC that starts at 01:00:00).
+            const curTc = s.timecode
+            if (curTc) {
+              const curTcStr = [curTc.hours, curTc.minutes, curTc.seconds, curTc.frames]
+                .map(n => String(n).padStart(2, '0')).join(':')
+              const curFrames = tcToFrames(curTcStr, fps)
+              const deltaSec = (targetFrames - curFrames) / fps
+              handleSeek(Math.max(0, s.currentTime + deltaSec))
+            } else {
+              // No current TC — fall back to absolute conversion (generator mode at 0)
+              handleSeek(targetFrames / fps)
+            }
+          }} />
 
-          {filePath ? (
+          {audioLoading ? (
+            <div className="file-info file-info--loading">
+              <span className="file-loading-spinner" />
+              {loadingFileName ?? t(lang, 'loading')}
+            </div>
+          ) : filePath ? (
             <div className="file-info">{fileName}</div>
           ) : (
             <div className="drop-zone" onClick={() => openFile()}>
@@ -1326,6 +1485,7 @@ export default function App(): React.JSX.Element {
             onPause={handlePause}
             onStop={handleStop}
             onSeek={handleSeek}
+            onPanic={handlePanic}
           />
 
           {/* Auto-advance countdown banner */}
@@ -1357,6 +1517,14 @@ export default function App(): React.JSX.Element {
               className={`right-tab-btn${rightTab === 'structure' ? ' active' : ''}`}
               onClick={() => useStore.getState().setRightTab('structure')}
             >{t(lang, 'structureTitle')}</button>
+            <button
+              className={`right-tab-btn${rightTab === 'calc' ? ' active' : ''}`}
+              onClick={() => useStore.getState().setRightTab('calc')}
+            >{t(lang, 'tabCalc')}</button>
+            <button
+              className={`right-tab-btn${rightTab === 'log' ? ' active' : ''}`}
+              onClick={() => useStore.getState().setRightTab('log')}
+            >{t(lang, 'tabLog')}</button>
           </div>
 
           {rightTab === 'devices' && (
@@ -1377,6 +1545,7 @@ export default function App(): React.JSX.Element {
                 onMidiInputPortChange={selectMidiInputPort}
                 onStartLearn={handleStartLearn}
                 learningMappingId={learningMappingId}
+                lastFiredCueId={lastFiredCueId}
               />
             </ProGate>
           )}
@@ -1386,12 +1555,29 @@ export default function App(): React.JSX.Element {
               <StructurePanel onSeek={handleSeek} />
             </ProGate>
           )}
+
+          {rightTab === 'calc' && <TcCalcPanel />}
+
+          {rightTab === 'log' && <ShowLogPanel />}
         </div>
       </div>
 
       <StatusBar
         version={version}
         onToggleFullscreen={() => setFullscreenTc(true)}
+        onSwitchToGenerator={() => {
+          const s = useStore.getState()
+          const lastTc = s.timecode
+          if (lastTc) {
+            const startTc = [lastTc.hours, lastTc.minutes, lastTc.seconds, lastTc.frames]
+              .map(n => String(n).padStart(2, '0')).join(':')
+            s.setGeneratorStartTC(startTc)
+            s.setGeneratorFps(lastTc.fps)
+            engine.current?.setGeneratorStartTC(startTc, lastTc.fps)
+          }
+          s.setTcGeneratorMode(true)
+          engine.current?.setGeneratorMode(true)
+        }}
       />
 
       {showLtcWavDialog && (

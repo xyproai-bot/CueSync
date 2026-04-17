@@ -58,6 +58,9 @@ export function framesToTc(totalFrames: number, fps: number): TcComponents {
     const framesPer10Min = framesPerMin * 10 + D   // 17982
     const framesPerHour = framesPer10Min * 6       // 107892
 
+    // Wrap at 24 hours to match LTC receivers (SMPTE 12M only defines 0-23h)
+    totalFrames = totalFrames % (framesPerHour * 24)
+
     const h = Math.floor(totalFrames / framesPerHour) % 24
     let remaining = totalFrames - h * framesPerHour
     const tenMinBlocks = Math.floor(remaining / framesPer10Min)
@@ -78,8 +81,11 @@ export function framesToTc(totalFrames: number, fps: number): TcComponents {
 
     return { h: h % 24, m: m % 60, s: s % 60, f: Math.min(f, 29) }
   } else {
-    const h = Math.floor(totalFrames / (3600 * fpsInt))
-    totalFrames -= h * 3600 * fpsInt
+    // Wrap at 24h
+    const framesPerHour = 3600 * fpsInt
+    totalFrames = totalFrames % (framesPerHour * 24)
+    const h = Math.floor(totalFrames / framesPerHour)
+    totalFrames -= h * framesPerHour
     const m = Math.floor(totalFrames / (60 * fpsInt))
     totalFrames -= m * 60 * fpsInt
     const s = Math.floor(totalFrames / fpsInt)

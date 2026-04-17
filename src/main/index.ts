@@ -204,12 +204,118 @@ async function lemonSqueezyRequest(
     })
     const data = await response.json()
     if (data.valid || data.activated) {
+      // Persist validated state via safeStorage on success
+      if (action !== 'deactivate') {
+        saveProState({
+          licenseKey,
+          validatedAt: Date.now(),
+          status: data.license_key?.status ?? 'active',
+          fingerprint: getMachineFingerprint()
+        })
+      } else {
+        clearProState()
+      }
       return { valid: true, status: data.license_key?.status }
     }
     return { valid: false, error: data.error || data.message || 'Invalid license key' }
   } catch (e) {
     return { valid: false, error: `Network error: ${(e as Error).message}` }
   }
+}
+
+// ════════════════════════════════════════════════════════════
+// Pro state persistence via safeStorage (OS keychain encryption)
+// ════════════════════════════════════════════════════════════
+// Renderer's localStorage is trivially tampered via DevTools —
+// storing Pro state there means users unlock Pro in <60 seconds.
+// safeStorage uses OS keychain (Keychain on macOS, DPAPI on Windows)
+// so the blob on disk is encrypted and only decryptable by this app
+// on this machine. Renderer can READ the blob but can't decrypt it.
+
+interface ProState {
+  licenseKey: string
+  validatedAt: number  // ms
+  status: string       // 'active' | 'expired' | 'refunded' | 'revoked'
+  expiresAt?: string   // ISO date, for promo licenses
+  fingerprint?: string // machine fingerprint at activation time — binds Pro to hardware
+}
+
+function getProStatePath(): string {
+  return join(app.getPath('userData'), '.pro-state')
+}
+
+function saveProState(state: ProState): void {
+  try {
+    const { safeStorage } = require('electron')
+    if (!safeStorage.isEncryptionAvailable()) {
+      // Fallback: write plaintext (still better than renderer-modifiable store)
+      writeFileSync(getProStatePath(), JSON.stringify(state), 'utf-8')
+      return
+    }
+    const encrypted = safeStorage.encryptString(JSON.stringify(state))
+    writeFileSync(getProStatePath(), encrypted)
+  } catch { /* non-fatal */ }
+}
+
+function readProState(): ProState | null {
+  try {
+    const p = getProStatePath()
+    if (!existsSync(p)) return null
+    const { safeStorage } = require('electron')
+    const raw = readFileSync(p)
+    if (safeStorage.isEncryptionAvailable()) {
+      try { return JSON.parse(safeStorage.decryptString(raw)) } catch { return null }
+    }
+    // Fallback plaintext
+    try { return JSON.parse(raw.toString('utf-8')) } catch { return null }
+  } catch { return null }
+}
+
+function clearProState(): void {
+  try {
+    const p = getProStatePath()
+    if (existsSync(p)) require('fs').unlinkSync(p)
+  } catch { /* non-fatal */ }
+}
+
+/**
+ * Returns true if the app is currently in Pro state.
+ * Main process is authoritative — renderer cannot forge this because
+ * the state is encrypted via OS keychain.
+ * Clock rollback check is built-in (expire immediately on tamper).
+ */
+function computeIsPro(): { isPro: boolean; reason: string } {
+  // Rollback check first
+  const hw = updateHighWater()
+  if (hw.rolledBack) return { isPro: false, reason: 'clock-tampered' }
+
+  const state = readProState()
+  if (!state) return { isPro: false, reason: 'no-license' }
+  if (state.status !== 'active') return { isPro: false, reason: `status-${state.status}` }
+
+  // Promo hard expiry
+  if (state.expiresAt) {
+    if (new Date(state.expiresAt).getTime() < Date.now()) {
+      return { isPro: false, reason: 'expired' }
+    }
+  }
+
+  // Hardware fingerprint binding: if the license was activated on a different
+  // machine (user cloned .pro-state, swapped hardware, or transferred install),
+  // require re-activation. Legitimate hardware swaps just need one re-activate.
+  if (state.fingerprint) {
+    const current = getMachineFingerprint()
+    if (state.fingerprint !== current) {
+      return { isPro: false, reason: 'hardware-changed' }
+    }
+  }
+
+  // 30-day offline grace period since last successful server validation
+  const daysSince = (Date.now() - state.validatedAt) / (1000 * 60 * 60 * 24)
+  if (daysSince < -1) return { isPro: false, reason: 'clock-tampered' }  // validated in future
+  if (daysSince > 30) return { isPro: false, reason: 'offline-grace-exceeded' }
+
+  return { isPro: true, reason: 'ok' }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -224,7 +330,13 @@ const WORKER_API = 'https://ltcast-trial.xypro-ai.workers.dev'
  * The Worker receives LemonSqueezy webhooks and tracks refunds/cancellations.
  * Returns 'active', 'expired', 'refunded', 'revoked', or 'unknown' (no record).
  */
-async function checkLicenseStatus(licenseKey: string): Promise<{ status: string }> {
+async function checkLicenseStatus(licenseKey: string): Promise<{ status: string; tampered?: boolean; expiresAt?: string | null }> {
+  // Clock rollback check: if detected, force expire regardless of server response
+  const hw = updateHighWater()
+  if (hw.rolledBack) {
+    clearProState()
+    return { status: 'expired', tampered: true }
+  }
   try {
     const { net } = require('electron')
     const response = await net.fetch(`${WORKER_API}/license/check`, {
@@ -232,7 +344,20 @@ async function checkLicenseStatus(licenseKey: string): Promise<{ status: string 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ licenseKey })
     })
-    return await response.json()
+    const data = await response.json()
+    // Worker is authoritative — update encrypted pro state based on result
+    if (data.status === 'active') {
+      saveProState({
+        licenseKey, validatedAt: Date.now(),
+        status: 'active',
+        expiresAt: data.expiresAt || undefined,
+        fingerprint: getMachineFingerprint()
+      })
+    } else if (data.status === 'refunded' || data.status === 'revoked' || data.status === 'expired') {
+      clearProState()
+    }
+    // 'unknown' = Worker doesn't have the key yet — leave existing state alone
+    return data
   } catch {
     return { status: 'unknown' }
   }
@@ -311,7 +436,13 @@ function _getHardwareUUID(): string | null {
   return null
 }
 
-async function checkTrial(): Promise<{ daysLeft: number; expired: boolean }> {
+async function checkTrial(): Promise<{ daysLeft: number; expired: boolean; tampered?: boolean }> {
+  // Always update high-water mark on trial check, regardless of network.
+  // Rollback detection must work even when online to prevent "rollback + online = reset" attacks.
+  const hw = updateHighWater()
+  if (hw.rolledBack) {
+    return { daysLeft: 0, expired: true, tampered: true }
+  }
   try {
     const { net } = require('electron')
     const fingerprint = getMachineFingerprint()
@@ -337,7 +468,58 @@ function getLocalTrialPath(): string {
   return join(os.homedir(), 'Library', 'Application Support', '.ltcast-trial')
 }
 
-function checkLocalTrial(): { daysLeft: number; expired: boolean } {
+/**
+ * Monotonic "high-water mark" timestamp to detect clock rollback tampering.
+ * Written on every license/trial check. If the system clock ever goes
+ * earlier than the stored value, the user rolled it back to cheat the
+ * trial / offline license grace period → treat as tampered.
+ */
+function getHighWaterPath(): string {
+  const os = require('os')
+  if (process.platform === 'win32') {
+    return join(os.homedir(), 'AppData', 'Local', '.ltcast-hw')
+  }
+  return join(os.homedir(), 'Library', 'Application Support', '.ltcast-hw')
+}
+
+function readHighWater(): number {
+  try {
+    const p = getHighWaterPath()
+    if (!existsSync(p)) return 0
+    const n = parseInt(readFileSync(p, 'utf8').trim(), 10)
+    return isNaN(n) ? 0 : n
+  } catch { return 0 }
+}
+
+function writeHighWater(ts: number): void {
+  try {
+    const p = getHighWaterPath()
+    const dir = dirname(p)
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    writeFileSync(p, String(ts))
+  } catch { /* non-fatal */ }
+}
+
+/**
+ * Update high-water mark to max(stored, now).
+ * Returns true if clock rollback was detected (stored > now by >1 day).
+ * The 1-day tolerance handles timezone changes and small NTP corrections.
+ */
+function updateHighWater(): { rolledBack: boolean; stored: number; now: number } {
+  const now = Date.now()
+  const stored = readHighWater()
+  const rolledBack = stored > 0 && (stored - now) > 24 * 60 * 60 * 1000
+  if (now > stored) writeHighWater(now)
+  return { rolledBack, stored, now }
+}
+
+function checkLocalTrial(): { daysLeft: number; expired: boolean; tampered?: boolean } {
+  // Clock-rollback check first — if the user rolled back, expire immediately
+  const hw = updateHighWater()
+  if (hw.rolledBack) {
+    return { daysLeft: 0, expired: true, tampered: true }
+  }
+
   const trialPath = getLocalTrialPath()
   let trialStart: number
   if (existsSync(trialPath)) {
@@ -353,7 +535,10 @@ function checkLocalTrial(): { daysLeft: number; expired: boolean } {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     writeFileSync(trialPath, String(trialStart))
   }
-  const daysUsed = Math.floor((Date.now() - trialStart) / (1000 * 60 * 60 * 24))
+  // Use max(Date.now(), high-water) so rollback between the tolerance window
+  // and full rollback still gives correct elapsed days
+  const effectiveNow = Math.max(Date.now(), hw.stored)
+  const daysUsed = Math.floor((effectiveNow - trialStart) / (1000 * 60 * 60 * 24))
   const daysLeft = Math.max(0, 14 - daysUsed)
   return { daysLeft, expired: daysLeft <= 0 }
 }
@@ -365,7 +550,10 @@ function checkLocalTrial(): { daysLeft: number; expired: boolean } {
 let oscSocket: dgram.Socket | null = null
 
 function oscString(str: string): Buffer {
-  const buf = Buffer.from(str + '\0', 'ascii')
+  // utf8 — OSC 1.0 says ASCII but Resolume/TouchDesigner/most modern
+  // receivers accept utf8 and users expect CJK song names to transmit correctly.
+  // ASCII encoding silently stripped high bits, corrupting non-Latin names.
+  const buf = Buffer.from(str + '\0', 'utf8')
   const rem = buf.length % 4
   return rem === 0 ? buf : Buffer.concat([buf, Buffer.alloc(4 - rem)])
 }
@@ -381,6 +569,7 @@ function oscMessage(address: string, types: string, ...args: (number | string)[]
   for (let i = 0; i < args.length; i++) {
     const t = types[i]
     if (t === 'i') parts.push(oscInt32(args[i] as number))
+    else if (t === 'f') { const buf = Buffer.alloc(4); buf.writeFloatBE(args[i] as number, 0); parts.push(buf) }
     else if (t === 's') parts.push(oscString(args[i] as string))
   }
   return Buffer.concat(parts)
@@ -470,7 +659,11 @@ function createWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      // Critical for live-show reliability: keep timers running at full rate
+      // when window is backgrounded (A-B loop, MIDI Clock, auto-advance, cue
+      // triggers all rely on sub-second timer precision)
+      backgroundThrottling: false
     },
     show: false,
     title: 'LTCast'
@@ -789,9 +982,35 @@ app.whenReady().then(() => {
     } catch { return [] }
   })
 
+  // Track paths the user has explicitly approved via save dialog, so
+  // save-preset(filePath) can't be abused to write arbitrary locations from
+  // a compromised renderer.
+  const approvedSavePaths = new Set<string>()
+
+  const sanitizePresetName = (name: string): string => {
+    // Strip illegal chars + leading dots (Windows reserved)
+    const cleaned = String(name).replace(/[<>:"/\\|?*\0]/g, '_').replace(/^\.+/, '_')
+    // Prevent path traversal components
+    return cleaned.replace(/\.\.+/g, '__').slice(0, 200) || 'untitled'
+  }
+
   // IPC: save preset to a specific path (used when path is already known)
   ipcMain.handle('save-preset', (_event, name: string, data: unknown, filePath?: string) => {
-    const dest = filePath ?? join(presetsDir, name.replace(/[<>:"/\\|?*]/g, '_') + '.ltcast')
+    let dest: string
+    if (filePath) {
+      // Only accept filePath if it's inside presetsDir OR was previously
+      // returned by save-preset-dialog (user-approved)
+      const resolved = require('path').resolve(filePath)
+      const presetsResolved = require('path').resolve(presetsDir)
+      const inPresetsDir = resolved.startsWith(presetsResolved + require('path').sep)
+      if (!inPresetsDir && !approvedSavePaths.has(resolved)) {
+        throw new Error('Invalid save path')
+      }
+      if (!resolved.endsWith('.ltcast')) throw new Error('Save path must end with .ltcast')
+      dest = resolved
+    } else {
+      dest = join(presetsDir, sanitizePresetName(name) + '.ltcast')
+    }
     const dir = dirname(dest)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     const content = JSON.stringify({ name, data, updatedAt: new Date().toISOString() }, null, 2)
@@ -810,14 +1029,20 @@ app.whenReady().then(() => {
       ]
     })
     if (result.canceled || !result.filePath) return null
+    // Track the approved path so save-preset can write to it later
+    approvedSavePaths.add(require('path').resolve(result.filePath))
     return result.filePath
   })
 
   // IPC: delete preset from filesystem
   ipcMain.handle('delete-preset', (_event, name: string) => {
-    const safeName = name.replace(/[<>:"/\\|?*]/g, '_')
+    const safeName = sanitizePresetName(name)
     const filePath = join(presetsDir, safeName + '.ltcast')
-    if (existsSync(filePath)) unlinkSync(filePath)
+    // Ensure final path is still inside presetsDir after any basename collapse
+    const resolved = require('path').resolve(filePath)
+    const presetsResolved = require('path').resolve(presetsDir)
+    if (!resolved.startsWith(presetsResolved + require('path').sep)) return false
+    if (existsSync(resolved)) unlinkSync(resolved)
     return true
   })
 
@@ -1024,26 +1249,33 @@ app.whenReady().then(() => {
     return result.filePaths[0]
   })
 
-  // IPC: scan a directory (and subdirectories, max 10 levels) for files matching given filenames
+  // IPC: scan a directory (and subdirectories, max 3 levels) for files matching given filenames
+  // Uses lstatSync and skips symlinks to prevent symlink-escape DoS / info-leak
+  // Caps total entries visited to prevent runaway scans
   ipcMain.handle('scan-folder-for-files', (_e, folderPath: string, fileNames: string[]) => {
-    const MAX_DEPTH = 10
+    const MAX_DEPTH = 3
+    const MAX_ENTRIES = 50_000
     const result: Record<string, string> = {}
-    const targets = new Set(fileNames.map(n => n.toLowerCase()))
+    if (!isSafeFilePath(folderPath) || !Array.isArray(fileNames)) return result
+    const { lstatSync } = require('fs')
+    const targets = new Set(fileNames.map(n => String(n).toLowerCase()))
+    let visited = 0
     const scan = (dir: string, depth: number): void => {
-      if (depth > MAX_DEPTH) return
+      if (depth > MAX_DEPTH || visited > MAX_ENTRIES) return
       let entries: string[]
       try { entries = readdirSync(dir) } catch { return }
       for (const entry of entries) {
+        if (++visited > MAX_ENTRIES) return
         const full = join(dir, entry)
         try {
-          const st = statSync(full)
+          const st = lstatSync(full)  // lstat: do not follow symlinks
+          if (st.isSymbolicLink()) continue
           if (st.isDirectory()) {
             scan(full, depth + 1)
           } else if (targets.has(entry.toLowerCase()) && !result[entry.toLowerCase()]) {
             result[entry.toLowerCase()] = full
           }
         } catch { /* skip inaccessible */ }
-        // Early exit if all found
         if (Object.keys(result).length === targets.size) return
       }
     }
@@ -1079,11 +1311,23 @@ app.whenReady().then(() => {
     return result.filePaths
   })
 
+  // Reject paths that could trigger ffmpeg pseudo-protocol attacks (concat:,
+  // subfile, pipe:, cache:, ...) or remote SMB/UNC pulls. Only allow plain
+  // filesystem paths.
+  const isSafeFilePath = (p: unknown): p is string => {
+    if (typeof p !== 'string' || p.length === 0 || p.length > 1024) return false
+    if (p.startsWith('\\\\')) return false                                // UNC
+    if (/^[a-z][a-z0-9+.-]*:(?![\\/])/i.test(p)) return false             // protocol like concat:
+    if (p.includes('\0')) return false                                    // null byte
+    return true
+  }
+
   // IPC: get audio durations for multiple files via ffprobe
   ipcMain.handle('get-audio-durations', async (_event, filePaths: string[]) => {
     const results: Record<string, number | null> = {}
+    if (!Array.isArray(filePaths)) return results
     for (const fp of filePaths) {
-      if (!fp || !existsSync(fp)) { results[fp] = null; continue }
+      if (!isSafeFilePath(fp) || !existsSync(fp)) { results[fp as string] = null; continue }
       try {
         const dur = await new Promise<number>((resolve, reject) => {
           ffmpeg.ffprobe(fp, (err, metadata) => {
@@ -1100,7 +1344,8 @@ app.whenReady().then(() => {
   // IPC: read file as buffer (async to avoid blocking main process)
   const MAX_AUDIO_FILE_SIZE = 500 * 1024 * 1024  // 500 MB
   ipcMain.handle('read-audio-file', (_event, filePath: string) => {
-    if (!filePath || !existsSync(filePath)) throw new Error('File not found: ' + filePath)
+    if (!isSafeFilePath(filePath)) throw new Error('Invalid file path')
+    if (!existsSync(filePath)) throw new Error('File not found: ' + filePath)
     const fileSize = statSync(filePath).size
     if (fileSize > MAX_AUDIO_FILE_SIZE) throw new Error(`File too large (${Math.round(fileSize / 1024 / 1024)} MB, max ${MAX_AUDIO_FILE_SIZE / 1024 / 1024} MB)`)
     return new Promise<ArrayBuffer>((resolve, reject) => {
@@ -1127,7 +1372,8 @@ app.whenReady().then(() => {
 
   // IPC: extract audio from video via ffmpeg
   ipcMain.handle('extract-audio-from-video', async (_event, filePath: string) => {
-    if (!filePath || !existsSync(filePath)) throw new Error('File not found: ' + filePath)
+    if (!isSafeFilePath(filePath)) throw new Error('Invalid file path')
+    if (!existsSync(filePath)) throw new Error('File not found: ' + filePath)
 
     const outPath = join(tmpdir(), `ltcast-video-audio-${Date.now()}.wav`)
 
@@ -1213,11 +1459,39 @@ app.whenReady().then(() => {
     return true
   })
 
+  // Shared UDP send helper: validates port, swallows per-send errors so a
+  // transient bad target (ENETUNREACH) doesn't tear down the socket
+  const safeUdpSend = (sock: dgram.Socket | null, pkt: Buffer, port: number, ip: string): void => {
+    if (!sock) return
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return
+    try {
+      sock.send(pkt, 0, pkt.length, port, ip, (err) => {
+        if (err) console.warn('[UDP] send failed:', err.code || err.message)
+      })
+    } catch (e) {
+      console.warn('[UDP] sync send threw:', e)
+    }
+  }
+
+  // Validate OSC address pattern per OSC 1.0 (starts with /, limited charset)
+  const isValidOscAddress = (addr: string): boolean =>
+    typeof addr === 'string' && addr.length > 0 && addr.length <= 256 &&
+    addr.startsWith('/') && !/[\s#*,?[\]{}\x00-\x1f]/.test(addr)
+
   ipcMain.on('osc-send-tc', (_event, hours: number, minutes: number, seconds: number, frames: number, fps: number, targetIp: string, port: number) => {
     if (!oscSocket) return
     const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
     const pkt = oscMessage('/timecode', 'iiiii', hours, minutes, seconds, frames, fps)
-    oscSocket.send(pkt, 0, pkt.length, port, ip)
+    safeUdpSend(oscSocket, pkt, port, ip)
+  })
+
+  ipcMain.on('osc-send-tc-custom', (_event, address: string, tcString: string, fps: number, targetIp: string, port: number) => {
+    if (!oscSocket) return
+    if (!isValidOscAddress(address)) return
+    const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
+    const safeTcStr = typeof tcString === 'string' ? tcString.slice(0, 64) : ''
+    const pkt = oscMessage(address, 'sf', safeTcStr, fps)
+    safeUdpSend(oscSocket, pkt, port, ip)
   })
 
   ipcMain.on('osc-send-transport', (_event, state: string, targetIp: string, port: number) => {
@@ -1227,14 +1501,17 @@ app.whenReady().then(() => {
                : state === 'pause' ? '/transport/pause'
                : '/transport/stop'
     const pkt = oscMessage(addr, '')
-    oscSocket.send(pkt, 0, pkt.length, port, ip)
+    safeUdpSend(oscSocket, pkt, port, ip)
   })
 
   ipcMain.on('osc-send-song', (_event, name: string, index: number, targetIp: string, port: number) => {
     if (!oscSocket) return
     const ip = (targetIp && isValidIp(targetIp)) ? targetIp : '127.0.0.1'
-    const pkt = oscMessage('/song', 'si', name, index)
-    oscSocket.send(pkt, 0, pkt.length, port, ip)
+    // Cap song name length to keep UDP packet below typical 1472 MTU
+    const safeName = typeof name === 'string' ? name.slice(0, 256) : ''
+    const safeIndex = Number.isInteger(index) ? index : 0
+    const pkt = oscMessage('/song', 'si', safeName, safeIndex)
+    safeUdpSend(oscSocket, pkt, port, ip)
   })
 
   // IPC: show input dialog (replacement for prompt())
@@ -1243,8 +1520,67 @@ app.whenReady().then(() => {
   ipcMain.handle('license-deactivate', async (_event, key: string) => lemonSqueezyRequest('deactivate', key))
   ipcMain.handle('license-validate', async (_event, key: string) => lemonSqueezyRequest('validate', key))
   ipcMain.handle('license-status', async (_event, key: string) => checkLicenseStatus(key))
+  // Authoritative Pro check — encrypted safeStorage, tamper-resistant
+  ipcMain.handle('is-pro', () => computeIsPro())
+  ipcMain.handle('print-to-pdf', async (_event, html: string, defaultName: string) => {
+    const { dialog } = require('electron')
+    const { writeFileSync } = require('fs')
+    const result = await dialog.showSaveDialog({
+      defaultPath: defaultName,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    const hiddenWin = new BrowserWindow({
+      show: false, width: 800, height: 600,
+      webPreferences: {
+        nodeIntegration: false, contextIsolation: true, sandbox: true,
+        javascript: false  // PDF content is static HTML — disable JS entirely
+      }
+    })
+    // Inject a strict CSP so even if somehow untrusted HTML slips through
+    // (current caller sanitizes, but future callers may not), no JS/remote/file
+    const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; base-uri 'none'">`
+    const safeHtml = html.includes('<head>') ? html.replace('<head>', `<head>${csp}`) : csp + html
+    // try/finally so the hidden window is always torn down — otherwise a
+    // failed loadURL / printToPDF leaks a renderer process per attempt.
+    // destroy() is used instead of close() because JS is disabled in this
+    // window so there's no unload handler to rely on.
+    try {
+      await hiddenWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(safeHtml)}`)
+      const pdfBuffer = await hiddenWin.webContents.printToPDF({ printBackground: true, landscape: false })
+      writeFileSync(result.filePath, pdfBuffer)
+      return result.filePath
+    } finally {
+      try { hiddenWin.destroy() } catch { /* ignore */ }
+    }
+  })
+
+  ipcMain.handle('clipboard-write', (_event, text: string) => {
+    if (typeof text !== 'string' || text.length > 100_000) return
+    const { clipboard } = require('electron')
+    clipboard.writeText(text)
+  })
+  ipcMain.handle('open-external', async (_event, url: string) => {
+    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('mailto:'))) {
+      await shell.openExternal(url)
+    }
+  })
   ipcMain.handle('trial-check', async () => checkTrial())
   ipcMain.handle('get-machine-fingerprint', () => getMachineFingerprint())
+  ipcMain.handle('promo-redeem', async (_event, code: string, email: string) => {
+    try {
+      const fingerprint = getMachineFingerprint()
+      const { net } = require('electron')
+      const resp = await net.fetch(`${WORKER_API}/promo/redeem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email, fingerprint })
+      })
+      return await resp.json()
+    } catch {
+      return { error: 'Network error' }
+    }
+  })
 
   ipcMain.handle('show-input-dialog', async (_event, title: string, label: string, defaultValue: string) => {
     const focusedWin = BrowserWindow.getFocusedWindow()
