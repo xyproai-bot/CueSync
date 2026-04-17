@@ -224,7 +224,12 @@ const WORKER_API = 'https://ltcast-trial.xypro-ai.workers.dev'
  * The Worker receives LemonSqueezy webhooks and tracks refunds/cancellations.
  * Returns 'active', 'expired', 'refunded', 'revoked', or 'unknown' (no record).
  */
-async function checkLicenseStatus(licenseKey: string): Promise<{ status: string }> {
+async function checkLicenseStatus(licenseKey: string): Promise<{ status: string; tampered?: boolean }> {
+  // Clock rollback check: if detected, force expire regardless of server response
+  const hw = updateHighWater()
+  if (hw.rolledBack) {
+    return { status: 'expired', tampered: true }
+  }
   try {
     const { net } = require('electron')
     const response = await net.fetch(`${WORKER_API}/license/check`, {
@@ -311,7 +316,13 @@ function _getHardwareUUID(): string | null {
   return null
 }
 
-async function checkTrial(): Promise<{ daysLeft: number; expired: boolean }> {
+async function checkTrial(): Promise<{ daysLeft: number; expired: boolean; tampered?: boolean }> {
+  // Always update high-water mark on trial check, regardless of network.
+  // Rollback detection must work even when online to prevent "rollback + online = reset" attacks.
+  const hw = updateHighWater()
+  if (hw.rolledBack) {
+    return { daysLeft: 0, expired: true, tampered: true }
+  }
   try {
     const { net } = require('electron')
     const fingerprint = getMachineFingerprint()
@@ -337,7 +348,58 @@ function getLocalTrialPath(): string {
   return join(os.homedir(), 'Library', 'Application Support', '.ltcast-trial')
 }
 
-function checkLocalTrial(): { daysLeft: number; expired: boolean } {
+/**
+ * Monotonic "high-water mark" timestamp to detect clock rollback tampering.
+ * Written on every license/trial check. If the system clock ever goes
+ * earlier than the stored value, the user rolled it back to cheat the
+ * trial / offline license grace period → treat as tampered.
+ */
+function getHighWaterPath(): string {
+  const os = require('os')
+  if (process.platform === 'win32') {
+    return join(os.homedir(), 'AppData', 'Local', '.ltcast-hw')
+  }
+  return join(os.homedir(), 'Library', 'Application Support', '.ltcast-hw')
+}
+
+function readHighWater(): number {
+  try {
+    const p = getHighWaterPath()
+    if (!existsSync(p)) return 0
+    const n = parseInt(readFileSync(p, 'utf8').trim(), 10)
+    return isNaN(n) ? 0 : n
+  } catch { return 0 }
+}
+
+function writeHighWater(ts: number): void {
+  try {
+    const p = getHighWaterPath()
+    const dir = dirname(p)
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    writeFileSync(p, String(ts))
+  } catch { /* non-fatal */ }
+}
+
+/**
+ * Update high-water mark to max(stored, now).
+ * Returns true if clock rollback was detected (stored > now by >1 day).
+ * The 1-day tolerance handles timezone changes and small NTP corrections.
+ */
+function updateHighWater(): { rolledBack: boolean; stored: number; now: number } {
+  const now = Date.now()
+  const stored = readHighWater()
+  const rolledBack = stored > 0 && (stored - now) > 24 * 60 * 60 * 1000
+  if (now > stored) writeHighWater(now)
+  return { rolledBack, stored, now }
+}
+
+function checkLocalTrial(): { daysLeft: number; expired: boolean; tampered?: boolean } {
+  // Clock-rollback check first — if the user rolled back, expire immediately
+  const hw = updateHighWater()
+  if (hw.rolledBack) {
+    return { daysLeft: 0, expired: true, tampered: true }
+  }
+
   const trialPath = getLocalTrialPath()
   let trialStart: number
   if (existsSync(trialPath)) {
@@ -353,7 +415,10 @@ function checkLocalTrial(): { daysLeft: number; expired: boolean } {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     writeFileSync(trialPath, String(trialStart))
   }
-  const daysUsed = Math.floor((Date.now() - trialStart) / (1000 * 60 * 60 * 24))
+  // Use max(Date.now(), high-water) so rollback between the tolerance window
+  // and full rollback still gives correct elapsed days
+  const effectiveNow = Math.max(Date.now(), hw.stored)
+  const daysUsed = Math.floor((effectiveNow - trialStart) / (1000 * 60 * 60 * 24))
   const daysLeft = Math.max(0, 14 - daysUsed)
   return { daysLeft, expired: daysLeft <= 0 }
 }
