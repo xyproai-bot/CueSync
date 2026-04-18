@@ -65,7 +65,7 @@ Forum rules (as of latest check):
 > - Free tier: LTC reader + generator, dual waveform, A-B loop, tap BPM, video import, all frame rates.
 > - Pro tier: MIDI Cues, MTC, MIDI Clock, Art-Net, OSC, setlist, Pre-Show Check, Show Log, Companion module, and the rest — full list at ltcast.app.
 > - 14-day Pro trial on first run, no credit card. $49/year or $15 for a 7-day single-event pass.
-> - Source is public under Commons Clause + MIT. Free for commercial productions; no redistribution of the software itself.
+> - Source is public under Commons Clause + MIT. Free to read, build, and fork; Commons Clause prevents third parties from repackaging and reselling the software itself. The shipping binary is freemium — free tier + paid Pro.
 >
 > [b]Links[/b]
 >

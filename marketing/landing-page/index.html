@@ -31,6 +31,11 @@
     <link rel="icon" type="image/png" href="assets/icon.png" />
     <link rel="canonical" href="https://ltcast.app" />
 
+    <!-- hreflang — single page serves both langs via JS, but signal the alternates -->
+    <link rel="alternate" hreflang="en" href="https://ltcast.app/?lang=en" />
+    <link rel="alternate" hreflang="zh-TW" href="https://ltcast.app/?lang=zh-TW" />
+    <link rel="alternate" hreflang="x-default" href="https://ltcast.app/" />
+
     <!-- Tailwind via CDN (replace with compiled build for production) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -44,6 +49,9 @@
                 '-apple-system',
                 'Segoe UI',
                 'Inter',
+                'Noto Sans TC',
+                'PingFang TC',
+                'Microsoft JhengHei',
                 'sans-serif',
               ],
               mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
@@ -69,7 +77,6 @@
     </script>
 
     <style>
-      /* Minimal custom CSS — keep inline so the page works as a single deploy unit */
       body {
         background:
           radial-gradient(1200px 600px at 50% -200px, rgba(44, 182, 255, 0.18), transparent 60%),
@@ -105,22 +112,35 @@
       .chevron {
         transition: transform 0.18s ease;
       }
+      [data-lang-btn][aria-pressed="true"] {
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+      }
+      /* Slightly tighter line-height for CJK — more natural with 繁體中文 */
+      html[lang="zh-TW"] body {
+        line-height: 1.6;
+      }
+      html[lang="zh-TW"] h1,
+      html[lang="zh-TW"] h2,
+      html[lang="zh-TW"] h3 {
+        letter-spacing: 0;
+      }
     </style>
   </head>
 
   <body class="font-sans antialiased">
     <!-- Header -->
     <header class="sticky top-0 z-40 backdrop-blur bg-ink-950/70 border-b border-white/5">
-      <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between gap-3">
         <a href="/" class="flex items-center gap-2">
           <img src="assets/icon.png" alt="LTCast" class="w-7 h-7 rounded" />
           <span class="font-semibold tracking-tight">LTCast</span>
         </a>
         <nav class="hidden md:flex items-center gap-7 text-sm text-white/70">
-          <a href="#features" class="hover:text-white">Features</a>
-          <a href="#why" class="hover:text-white">Why LTCast</a>
-          <a href="#pricing" class="hover:text-white">Pricing</a>
-          <a href="#faq" class="hover:text-white">FAQ</a>
+          <a href="#features" class="hover:text-white" data-zh="功能">Features</a>
+          <a href="#why" class="hover:text-white" data-zh="為什麼選 LTCast">Why LTCast</a>
+          <a href="#pricing" class="hover:text-white" data-zh="價格">Pricing</a>
+          <a href="#faq" class="hover:text-white" data-zh="常見問題">FAQ</a>
           <a
             href="https://github.com/xyproai-bot/LTCast"
             class="hover:text-white"
@@ -128,11 +148,33 @@
             >GitHub</a
           >
         </nav>
-        <a
-          href="#download"
-          class="inline-flex items-center gap-1.5 rounded-md bg-white text-ink-950 px-3.5 py-1.5 text-sm font-semibold hover:bg-accent-400 transition"
-          >Download</a
-        >
+        <div class="flex items-center gap-3">
+          <!-- Language toggle -->
+          <div
+            class="inline-flex items-center gap-0.5 rounded-md bg-white/5 border border-white/10 p-0.5 text-xs"
+            role="group"
+            aria-label="Language"
+          >
+            <button
+              type="button"
+              data-lang-btn="en"
+              class="px-2 py-1 rounded text-white/60 hover:text-white transition"
+              aria-pressed="true"
+            >EN</button>
+            <button
+              type="button"
+              data-lang-btn="zh-TW"
+              class="px-2 py-1 rounded text-white/60 hover:text-white transition"
+              aria-pressed="false"
+            >中</button>
+          </div>
+          <a
+            href="#download"
+            class="inline-flex items-center gap-1.5 rounded-md bg-white text-ink-950 px-3.5 py-1.5 text-sm font-semibold hover:bg-accent-400 transition"
+            data-zh="下載"
+            >Download</a
+          >
+        </div>
       </div>
     </header>
 
@@ -144,15 +186,22 @@
           class="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-white/70 mb-6"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-ok"></span>
-          Now shipping v0.5 — Companion, MIDI Clock, Custom OSC templates
+          <span data-zh="v0.5 已上架 — Companion、MIDI Clock、自訂 OSC 模板"
+            >Now shipping v0.5 — Companion, MIDI Clock, Custom OSC templates</span
+          >
         </div>
         <h1
           class="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.05] max-w-4xl mx-auto"
         >
-          Professional timecode player for
-          <span class="gradient-text">live shows, theatre, and broadcast.</span>
+          <span data-zh="專業 timecode 播放器 —">Professional timecode player for</span>
+          <span class="gradient-text" data-zh="現場演出、劇場、廣播都能用"
+            >live shows, theatre, and broadcast.</span
+          >
         </h1>
-        <p class="mt-6 text-lg text-white/70 max-w-2xl mx-auto">
+        <p
+          class="mt-6 text-lg text-white/70 max-w-2xl mx-auto"
+          data-zh="用精準的 timecode 同步整場秀。LTCast 讀取與產生 LTC、觸發 MIDI cue、同時送出 MTC、MIDI Clock、Art-Net、OSC — 全部在一個 app 裡。"
+        >
           Sync your show with precision timecode. LTCast reads and generates LTC, triggers MIDI
           cues, and sends MTC, MIDI Clock, Art-Net, and OSC — all from one app.
         </p>
@@ -167,6 +216,7 @@
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               class="w-5 h-5 fill-current"
+              aria-hidden="true"
             >
               <path
                 d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
@@ -177,17 +227,21 @@
                 fill="none"
               />
             </svg>
-            Download for Windows
+            <span data-zh="下載 Windows 版">Download for Windows</span>
           </a>
           <a
             href="https://github.com/xyproai-bot/LTCast/releases/latest"
             class="inline-flex items-center gap-2 rounded-lg bg-white/10 border border-white/15 text-white font-semibold px-5 py-3 hover:bg-white/15 transition"
             rel="noopener"
+            data-zh="下載 macOS（Universal）版"
           >
             Download for macOS (Universal)
           </a>
         </div>
-        <p class="mt-4 text-sm text-white/50">
+        <p
+          class="mt-4 text-sm text-white/50"
+          data-zh="所有 Pro 功能 14 天免費試用 — 不用綁信用卡。"
+        >
           14-day free trial of all Pro features — no credit card required.
         </p>
 
@@ -203,16 +257,16 @@
           </div>
         </div>
 
-        <!-- Logos strip (optional social proof — leave placeholders) -->
+        <!-- Logos strip -->
         <div
           class="mt-14 text-xs uppercase tracking-widest text-white/40 flex flex-wrap items-center justify-center gap-x-8 gap-y-3"
         >
-          <span>Built on SMPTE 12M</span>
-          <span>·</span>
-          <span>Art-Net 4 compliant</span>
-          <span>·</span>
+          <span data-zh="基於 SMPTE 12M">Built on SMPTE 12M</span>
+          <span aria-hidden="true">·</span>
+          <span data-zh="符合 Art-Net 4">Art-Net 4 compliant</span>
+          <span aria-hidden="true">·</span>
           <span>OSC 1.0 / 1.1</span>
-          <span>·</span>
+          <span aria-hidden="true">·</span>
           <span>MIDI Clock + MTC</span>
         </div>
       </div>
@@ -223,9 +277,14 @@
       <div class="max-w-6xl mx-auto px-6">
         <div class="max-w-2xl">
           <h2 class="text-3xl md:text-4xl font-bold tracking-tight">
-            One file. <span class="gradient-text">Every device.</span> Zero hardware.
+            <span data-zh="一個檔案。">One file.</span>
+            <span class="gradient-text" data-zh="所有裝置。">Every device.</span>
+            <span data-zh="不用硬體。">Zero hardware.</span>
           </h2>
-          <p class="mt-4 text-white/70">
+          <p
+            class="mt-4 text-white/70"
+            data-zh="LTCast 是唯一能同時輸出 LTC、MTC、MIDI Clock、Art-Net、OSC 的工具 — 不需要 dongle、不需要 rack、不需要串一堆脆弱的 app。"
+          >
             LTCast is the only tool that simultaneously outputs LTC, MTC, MIDI Clock, Art-Net, and
             OSC — no dongles, no rack, no chain of brittle apps.
           </p>
@@ -235,12 +294,15 @@
           <!-- LTC -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-6 hover:bg-white/[0.07] transition">
             <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current" aria-hidden="true">
                 <path d="M3 12h2l2-6 2 12 2-9 2 8 2-5 2 4 2-3 2 2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
-            <h3 class="font-semibold text-lg">LTC reader & generator</h3>
-            <p class="mt-2 text-sm text-white/60">
+            <h3 class="font-semibold text-lg" data-zh="LTC 讀取 + 產生">LTC reader &amp; generator</h3>
+            <p
+              class="mt-2 text-sm text-white/60"
+              data-zh="自動偵測任何音訊檔的 LTC 音軌與 frame rate。支援 Drop-frame 29.97 與 24 / 25 / 30 fps。沒有 LTC 的音軌也可以幫你產生。"
+            >
               Auto-detects LTC channel and frame rate from any audio file. Drop-frame 29.97 plus
               non-drop 24 / 25 / 30 fps. Generate LTC for tracks that don't have it.
             </p>
@@ -249,12 +311,15 @@
           <!-- MTC -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-6 hover:bg-white/[0.07] transition">
             <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current" aria-hidden="true">
                 <path d="M12 3a9 9 0 100 18 9 9 0 000-18zm-3 6l4-2 4 2-4 2-4-2zm-1 4l1 5m8-5l-1 5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
               </svg>
             </div>
-            <h3 class="font-semibold text-lg">MTC output</h3>
-            <p class="mt-2 text-sm text-white/60">
+            <h3 class="font-semibold text-lg" data-zh="MTC 輸出">MTC output</h3>
+            <p
+              class="mt-2 text-sm text-white/60"
+              data-zh="Quarter-frame 與 full-frame MIDI Timecode。透過 Web MIDI 的鏈式 timestamp 排程，消除 JS 抖動 — DAW 與 QLab 能乾淨 lock 上。"
+            >
               Quarter-frame and full-frame MIDI Timecode. Chained-timestamp scheduling over Web MIDI
               removes JS jitter — locks DAWs and QLab cleanly.
             </p>
@@ -263,12 +328,15 @@
           <!-- MIDI Clock -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-6 hover:bg-white/[0.07] transition">
             <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current" aria-hidden="true">
                 <path d="M12 6v6l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
               </svg>
             </div>
             <h3 class="font-semibold text-lg">MIDI Clock</h3>
-            <p class="mt-2 text-sm text-white/60">
+            <p
+              class="mt-2 text-sm text-white/60"
+              data-zh="以任何 BPM 送出 0xF8 時鐘訊號。用演出的主節拍驅動 drum machine、Ableton、Traktor、硬體合成器。"
+            >
               Send 0xF8 clock at any BPM. Drive drum machines, Ableton, Traktor, and hardware synths
               from your show's master tempo.
             </p>
@@ -277,12 +345,15 @@
           <!-- Art-Net -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-6 hover:bg-white/[0.07] transition">
             <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current" aria-hidden="true">
                 <path d="M12 3v4m0 10v4M3 12h4m10 0h4M5.6 5.6l2.8 2.8m7.2 7.2l2.8 2.8M5.6 18.4l2.8-2.8m7.2-7.2l2.8-2.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
               </svg>
             </div>
-            <h3 class="font-semibold text-lg">Art-Net output</h3>
-            <p class="mt-2 text-sm text-white/60">
+            <h3 class="font-semibold text-lg" data-zh="Art-Net 輸出">Art-Net output</h3>
+            <p
+              class="mt-2 text-sm text-white/60"
+              data-zh="UDP OpTimeCode 封包，支援 grandMA、ChamSys、Avolites 及所有 Art-Net 4 燈控。可設定 broadcast 或 unicast。"
+            >
               UDP OpTimeCode packets for grandMA, ChamSys, Avolites and any Art-Net 4 console.
               Configurable broadcast or unicast.
             </p>
@@ -291,12 +362,15 @@
           <!-- OSC -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-6 hover:bg-white/[0.07] transition">
             <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current" aria-hidden="true">
                 <path d="M4 12a8 8 0 0116 0M4 12h16M8 12a4 4 0 108 0" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
               </svg>
             </div>
-            <h3 class="font-semibold text-lg">OSC output</h3>
-            <p class="mt-2 text-sm text-white/60">
+            <h3 class="font-semibold text-lg" data-zh="OSC 輸出">OSC output</h3>
+            <p
+              class="mt-2 text-sm text-white/60"
+              data-zh="內建 Resolume、Disguise (d3)、WATCHOUT 的 cue 模板。可在任何 timecode 送出自訂 OSC 訊息。"
+            >
               Per-cue templates for Resolume, Disguise (d3), and WATCHOUT. Send arbitrary OSC
               messages at any timecode.
             </p>
@@ -305,12 +379,15 @@
           <!-- Companion / show tools -->
           <div class="rounded-xl border border-white/10 bg-gradient-to-br from-accent-500/10 to-transparent p-6 hover:bg-accent-500/15 transition">
             <div class="w-10 h-10 rounded-lg bg-accent-500/20 text-accent-400 flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current" aria-hidden="true">
                 <path d="M4 6h16v12H4z M4 10h16 M8 6v12 M16 6v12" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
               </svg>
             </div>
-            <h3 class="font-semibold text-lg">Show tools, built in</h3>
-            <p class="mt-2 text-sm text-white/60">
+            <h3 class="font-semibold text-lg" data-zh="演出工具內建">Show tools, built in</h3>
+            <p
+              class="mt-2 text-sm text-white/60"
+              data-zh="Pre-Show Check、Panic 按鈕、Show Log（CSV 匯出）、setlist 自動推進、Remote Display，還有 Bitfocus Companion 模組讓你用 Stream Deck 控制。"
+            >
               Pre-Show Check, Panic button, Show Log (CSV), Setlist auto-advance, Remote Display,
               and a Bitfocus Companion module for Stream Deck control.
             </p>
@@ -323,10 +400,13 @@
     <section id="why" class="py-20 border-t border-white/5">
       <div class="max-w-6xl mx-auto px-6">
         <div class="max-w-2xl">
-          <h2 class="text-3xl md:text-4xl font-bold tracking-tight">
+          <h2 class="text-3xl md:text-4xl font-bold tracking-tight" data-zh="為什麼選 LTCast">
             Why LTCast
           </h2>
-          <p class="mt-4 text-white/70">
+          <p
+            class="mt-4 text-white/70"
+            data-zh="大部分的秀最後都會串 3、4 個 app：一個 DAW 負責 LTC、一個額外的 MIDI Clock sender、一個 timecode-to-Art-Net bridge、一個 cue list。LTCast 一次取代這整套。"
+          >
             Most shows end up chaining three or four apps: a DAW for LTC, a separate MIDI Clock
             sender, a timecode-to-Art-Net bridge, and a cue list. LTCast replaces that stack.
           </p>
@@ -336,61 +416,64 @@
           <table class="w-full text-sm">
             <thead class="bg-white/5 text-white/80">
               <tr>
-                <th class="text-left font-semibold px-5 py-3">Capability</th>
+                <th class="text-left font-semibold px-5 py-3" data-zh="功能">Capability</th>
                 <th class="text-left font-semibold px-5 py-3">LTCast</th>
-                <th class="text-left font-semibold px-5 py-3">QLab (macOS only)</th>
-                <th class="text-left font-semibold px-5 py-3">Reaper / DAW + plugins</th>
-                <th class="text-left font-semibold px-5 py-3">Hardware (Rosendahl / Mutec)</th>
+                <th class="text-left font-semibold px-5 py-3" data-zh="QLab（僅 macOS）">QLab (macOS only)</th>
+                <th class="text-left font-semibold px-5 py-3" data-zh="Reaper / DAW + 外掛">Reaper / DAW + plugins</th>
+                <th class="text-left font-semibold px-5 py-3" data-zh="硬體（Rosendahl / Mutec）">Hardware (Rosendahl / Mutec)</th>
               </tr>
             </thead>
-            <tbody class="[&>tr]:border-t [&>tr]:border-white/5">
+            <tbody class="[&amp;>tr]:border-t [&amp;>tr]:border-white/5">
               <tr>
-                <td class="px-5 py-3 text-white/80">Windows & macOS</td>
-                <td class="px-5 py-3 text-ok">Both</td>
-                <td class="px-5 py-3 text-warn">macOS only</td>
-                <td class="px-5 py-3 text-ok">Both</td>
+                <td class="px-5 py-3 text-white/80" data-zh="Windows 與 macOS">Windows &amp; macOS</td>
+                <td class="px-5 py-3 text-ok" data-zh="兩者皆可">Both</td>
+                <td class="px-5 py-3 text-warn" data-zh="僅 macOS">macOS only</td>
+                <td class="px-5 py-3 text-ok" data-zh="兩者皆可">Both</td>
                 <td class="px-5 py-3 text-white/60">N/A</td>
               </tr>
               <tr>
-                <td class="px-5 py-3 text-white/80">LTC reader + generator</td>
-                <td class="px-5 py-3 text-ok">Built-in</td>
-                <td class="px-5 py-3 text-warn">Limited</td>
-                <td class="px-5 py-3 text-warn">Plugins</td>
-                <td class="px-5 py-3 text-ok">Yes</td>
+                <td class="px-5 py-3 text-white/80" data-zh="LTC 讀取 + 產生">LTC reader + generator</td>
+                <td class="px-5 py-3 text-ok" data-zh="內建">Built-in</td>
+                <td class="px-5 py-3 text-warn" data-zh="有限">Limited</td>
+                <td class="px-5 py-3 text-warn" data-zh="需外掛">Plugins</td>
+                <td class="px-5 py-3 text-ok" data-zh="是">Yes</td>
               </tr>
               <tr>
-                <td class="px-5 py-3 text-white/80">MTC + MIDI Clock + Art-Net + OSC simultaneously</td>
-                <td class="px-5 py-3 text-ok">Yes</td>
-                <td class="px-5 py-3 text-warn">Partial (needs workarounds)</td>
-                <td class="px-5 py-3 text-warn">Multiple plugins</td>
-                <td class="px-5 py-3 text-warn">LTC/MTC only</td>
+                <td class="px-5 py-3 text-white/80" data-zh="MTC + MIDI Clock + Art-Net + OSC 同時輸出">MTC + MIDI Clock + Art-Net + OSC simultaneously</td>
+                <td class="px-5 py-3 text-ok" data-zh="是">Yes</td>
+                <td class="px-5 py-3 text-warn" data-zh="部分（需要 workaround）">Partial (needs workarounds)</td>
+                <td class="px-5 py-3 text-warn" data-zh="需多個外掛">Multiple plugins</td>
+                <td class="px-5 py-3 text-warn" data-zh="僅 LTC/MTC">LTC/MTC only</td>
               </tr>
               <tr>
-                <td class="px-5 py-3 text-white/80">Setlist with auto-advance + GO workflow</td>
-                <td class="px-5 py-3 text-ok">Yes</td>
-                <td class="px-5 py-3 text-ok">Yes</td>
-                <td class="px-5 py-3 text-warn">Manual</td>
+                <td class="px-5 py-3 text-white/80" data-zh="Setlist 自動推進 + GO 流程">Setlist with auto-advance + GO workflow</td>
+                <td class="px-5 py-3 text-ok" data-zh="是">Yes</td>
+                <td class="px-5 py-3 text-ok" data-zh="是">Yes</td>
+                <td class="px-5 py-3 text-warn" data-zh="手動">Manual</td>
                 <td class="px-5 py-3 text-white/60">—</td>
               </tr>
               <tr>
-                <td class="px-5 py-3 text-white/80">Stream Deck / Companion control</td>
-                <td class="px-5 py-3 text-ok">Official module</td>
-                <td class="px-5 py-3 text-ok">Yes</td>
-                <td class="px-5 py-3 text-warn">Community</td>
+                <td class="px-5 py-3 text-white/80" data-zh="Stream Deck / Companion 控制">Stream Deck / Companion control</td>
+                <td class="px-5 py-3 text-ok" data-zh="官方模組">Official module</td>
+                <td class="px-5 py-3 text-ok" data-zh="是">Yes</td>
+                <td class="px-5 py-3 text-warn" data-zh="社群版">Community</td>
                 <td class="px-5 py-3 text-white/60">—</td>
               </tr>
               <tr>
-                <td class="px-5 py-3 text-white/80">Price</td>
-                <td class="px-5 py-3 text-white">$49 / year</td>
-                <td class="px-5 py-3 text-white/60">$99 – $999 (one-time)</td>
-                <td class="px-5 py-3 text-white/60">$225 + plugins</td>
+                <td class="px-5 py-3 text-white/80" data-zh="價格">Price</td>
+                <td class="px-5 py-3 text-white" data-zh="$49 / 年">$49 / year</td>
+                <td class="px-5 py-3 text-white/60" data-zh="$99 – $999（買斷）">$99 – $999 (one-time)</td>
+                <td class="px-5 py-3 text-white/60" data-zh="$225 + 外掛">$225 + plugins</td>
                 <td class="px-5 py-3 text-white/60">$600 – $2500</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <p class="mt-4 text-xs text-white/40">
+        <p
+          class="mt-4 text-xs text-white/40"
+          data-zh="比較表格反映撰寫當下各家公開資訊。產品商標為各自所有者擁有。"
+        >
           Comparison reflects publicly listed features at time of writing. Product trademarks belong
           to their respective owners.
         </p>
@@ -401,8 +484,11 @@
     <section id="pricing" class="py-20 border-t border-white/5 bg-ink-900/40">
       <div class="max-w-6xl mx-auto px-6">
         <div class="text-center max-w-2xl mx-auto">
-          <h2 class="text-3xl md:text-4xl font-bold tracking-tight">Pricing</h2>
-          <p class="mt-4 text-white/70">
+          <h2 class="text-3xl md:text-4xl font-bold tracking-tight" data-zh="價格">Pricing</h2>
+          <p
+            class="mt-4 text-white/70"
+            data-zh="Pro 功能 14 天免費試用。不用信用卡。隨時取消 — 你的檔案永遠是你的。"
+          >
             14-day free trial of all Pro features. No credit card. Cancel any time — your files stay
             yours.
           </p>
@@ -412,20 +498,21 @@
           <!-- 7-Day -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-6 flex flex-col">
             <h3 class="font-semibold text-lg">7-Day Pass</h3>
-            <p class="text-sm text-white/60 mt-1">Single event or one-off gig.</p>
+            <p class="text-sm text-white/60 mt-1" data-zh="單場演出或一次性 gig。">Single event or one-off gig.</p>
             <div class="mt-6">
               <span class="text-4xl font-bold tracking-tight">$15</span>
-              <span class="text-white/50 ml-1">/ 7 days</span>
+              <span class="text-white/50 ml-1" data-zh="/ 7 天">/ 7 days</span>
             </div>
             <ul class="mt-6 space-y-2 text-sm text-white/75 flex-1">
-              <li>All Pro features</li>
-              <li>No subscription</li>
-              <li>Activate on show day</li>
+              <li data-zh="所有 Pro 功能">All Pro features</li>
+              <li data-zh="免訂閱">No subscription</li>
+              <li data-zh="演出當天再啟用">Activate on show day</li>
             </ul>
             <a
               href="https://ltcast.lemonsqueezy.com/checkout/buy/de692eee-b2d4-4afe-af50-0ca44326fc73?enabled=1518383"
               class="mt-6 inline-flex justify-center rounded-lg bg-white/10 border border-white/15 px-4 py-2.5 font-semibold hover:bg-white/15"
               rel="noopener"
+              data-zh="購買 7-Day Pass"
               >Buy 7-Day Pass</a
             >
           </div>
@@ -434,43 +521,46 @@
           <div class="relative rounded-xl border border-accent-500/40 bg-gradient-to-b from-accent-500/15 to-transparent p-6 flex flex-col">
             <span
               class="absolute -top-3 left-6 bg-accent-500 text-ink-950 text-xs font-semibold rounded-full px-2.5 py-0.5"
+              data-zh="最多人選"
               >Most popular</span
             >
-            <h3 class="font-semibold text-lg">Annual</h3>
-            <p class="text-sm text-white/60 mt-1">Working pros and regular shows.</p>
+            <h3 class="font-semibold text-lg" data-zh="年費">Annual</h3>
+            <p class="text-sm text-white/60 mt-1" data-zh="職業工作者、定期演出。">Working pros and regular shows.</p>
             <div class="mt-6">
               <span class="text-4xl font-bold tracking-tight">$49</span>
-              <span class="text-white/50 ml-1">/ year</span>
+              <span class="text-white/50 ml-1" data-zh="/ 年">/ year</span>
             </div>
             <ul class="mt-6 space-y-2 text-sm text-white/85 flex-1">
-              <li>All Pro features</li>
-              <li>30-day offline grace period</li>
-              <li>Priority email support</li>
-              <li>All v0.x updates included</li>
+              <li data-zh="所有 Pro 功能">All Pro features</li>
+              <li data-zh="30 天離線寬限期">30-day offline grace period</li>
+              <li data-zh="優先 Email 支援">Priority email support</li>
+              <li data-zh="所有 v0.x 更新免費">All v0.x updates included</li>
             </ul>
             <a
               href="https://ltcast.lemonsqueezy.com/checkout/buy/5e0a0420-39bc-406c-83e2-dc7d36464369?enabled=1518368"
               class="mt-6 inline-flex justify-center rounded-lg bg-white text-ink-950 px-4 py-2.5 font-semibold hover:bg-accent-400"
               rel="noopener"
+              data-zh="購買年費"
               >Buy Annual</a
             >
           </div>
 
           <!-- Volume -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-6 flex flex-col">
-            <h3 class="font-semibold text-lg">Volume (10+)</h3>
-            <p class="text-sm text-white/60 mt-1">Rental houses, AV teams, education.</p>
+            <h3 class="font-semibold text-lg" data-zh="團購（10+）">Volume (10+)</h3>
+            <p class="text-sm text-white/60 mt-1" data-zh="Rental house、AV 團隊、教育機構。">Rental houses, AV teams, education.</p>
             <div class="mt-6">
-              <span class="text-4xl font-bold tracking-tight">Contact</span>
+              <span class="text-4xl font-bold tracking-tight" data-zh="聯絡我們">Contact</span>
             </div>
             <ul class="mt-6 space-y-2 text-sm text-white/75 flex-1">
-              <li>Team licensing</li>
-              <li>Invoice billing</li>
-              <li>Dedicated contact</li>
+              <li data-zh="團隊授權">Team licensing</li>
+              <li data-zh="發票開立">Invoice billing</li>
+              <li data-zh="專人對接">Dedicated contact</li>
             </ul>
             <a
               href="mailto:xypro.ai@gmail.com?subject=LTCast%20Volume%20Licensing"
               class="mt-6 inline-flex justify-center rounded-lg bg-white/10 border border-white/15 px-4 py-2.5 font-semibold hover:bg-white/15"
+              data-zh="Email 洽詢"
               >Email sales</a
             >
           </div>
@@ -481,14 +571,19 @@
     <!-- FAQ -->
     <section id="faq" class="py-20 border-t border-white/5">
       <div class="max-w-3xl mx-auto px-6">
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-center">FAQ</h2>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-center" data-zh="常見問題">FAQ</h2>
         <div class="mt-10 space-y-3">
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">How is LTCast different from QLab?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="LTCast 跟 QLab 差在哪？"
+                >How is LTCast different from QLab?</span
+              >
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh="QLab 是很棒的 show-control app，但只有 macOS 而且主要是 cueing。LTCast 在 Windows 和 macOS 都能跑，專門為 timecode 設計，開箱就同時輸出 LTC、MTC、MIDI Clock、Art-Net、OSC。很多使用者兩個都用 — LTCast 當 timecode master，QLab 負責 cue 播放。"
+            >
               QLab is a fantastic show-control app, but it's macOS only and focused on cueing. LTCast
               runs on Windows and macOS, is built specifically around timecode generation, and sends
               LTC, MTC, MIDI Clock, Art-Net, and OSC simultaneously out of the box. Many users run
@@ -498,10 +593,15 @@
 
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">Does it work on Windows and Mac?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="Windows 和 Mac 都能用嗎？"
+                >Does it work on Windows and Mac?</span
+              >
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh="都可以。Windows 10 以上（NSIS installer）和 macOS 12 以上（universal DMG、Intel + Apple Silicon）。同一份專案檔兩邊都能開。"
+            >
               Yes. Windows 10 or later (NSIS installer) and macOS 12 or later (universal DMG, Intel
               + Apple Silicon). The same project file works on both.
             </p>
@@ -509,10 +609,13 @@
 
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">Is there a free trial?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="有免費試用嗎？">Is there a free trial?</span>
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh="有 — 所有 Pro 功能 14 天免費試用，不用信用卡。免費版永久保留 LTC 讀取、LTC 產生、雙波形、A-B loop、Tap BPM、影片匯入。"
+            >
               Yes — 14 days of all Pro features, no credit card. Free tier keeps LTC reading,
               generation, dual waveform, A-B loop, tap BPM, and video import indefinitely.
             </p>
@@ -520,10 +623,15 @@
 
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">Do I need extra hardware?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="需要額外的硬體嗎？"
+                >Do I need extra hardware?</span
+              >
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh="LTC 輸出需要一個虛擬音訊 cable（Windows 用 VB-CABLE，macOS 用 BlackHole） — 都免費。MTC / MIDI Clock 需要虛擬 MIDI port（Windows 用 loopMIDI，macOS 內建 IAC Driver）。Art-Net 和 OSC 只需要網路。"
+            >
               For LTC output, you need a virtual audio cable (VB-CABLE on Windows, BlackHole on
               macOS) — both free. For MTC / MIDI Clock, use a virtual MIDI port (loopMIDI on
               Windows, built-in IAC Driver on macOS). Art-Net and OSC are just network.
@@ -532,10 +640,15 @@
 
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">What if my show is offline?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="如果演出場地沒網路呢？"
+                >What if my show is offline?</span
+              >
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh="啟用後可以完全離線跑。Pro 授權有 30 天離線寬限期 — 很適合沒有穩定網路的場地。有網路時會每幾小時在背景安靜地重新驗證。"
+            >
               LTCast runs completely offline after activation. A Pro license has a 30-day offline
               grace period — perfect for venues without stable internet. It silently re-validates in
               the background every few hours when a connection is available.
@@ -544,10 +657,15 @@
 
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">Do you have promo codes for students, rental houses, or community theatres?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="學生、rental house 或社區劇場有折扣嗎？"
+                >Do you have promo codes for students, rental houses, or community theatres?</span
+              >
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh-html='有。Email <a class="underline" href="mailto:xypro.ai@gmail.com">xypro.ai@gmail.com</a> 附上你簡短的介紹 — 學生、社區劇場、非營利製作都能拿到免費或大幅折扣的授權。'
+            >
               Yes. Email <a class="underline" href="mailto:xypro.ai@gmail.com">xypro.ai@gmail.com</a>
               with a short description of what you do — students, community theatres, and non-profit
               productions get a free or deeply discounted license.
@@ -556,10 +674,15 @@
 
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">Can I automate LTCast from Stream Deck / Companion?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="可以用 Stream Deck / Companion 控制 LTCast 嗎？"
+                >Can I automate LTCast from Stream Deck / Companion?</span
+              >
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh-html='可以。repo 裡 <code class="text-accent-400">companion/</code> 資料夾有官方 Bitfocus Companion 模組，透過本機 WebSocket 跟 LTCast 溝通。也支援 OSC Input（play、pause、next、選曲）。'
+            >
               Yes. There's an official Bitfocus Companion module in the <code class="text-accent-400">companion/</code>
               directory of the repo. It talks to LTCast over a local WebSocket. OSC Input (play,
               pause, next, select song) is also supported.
@@ -568,12 +691,19 @@
 
           <details class="group rounded-lg border border-white/10 bg-white/5 p-5">
             <summary class="flex items-center justify-between">
-              <span class="font-semibold">Is LTCast open source?</span>
-              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
+              <span class="font-semibold" data-zh="LTCast 是 open source 嗎？"
+                >Is LTCast open source?</span
+              >
+              <svg class="chevron w-4 h-4 text-white/60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5L10 12l4.5-4.5"/></svg>
             </summary>
-            <p class="mt-3 text-white/70 text-sm leading-relaxed">
-              The source is public under Commons Clause + MIT. Free for personal and commercial
-              productions. Redistribution or resale of the software itself is not permitted.
+            <p
+              class="mt-3 text-white/70 text-sm leading-relaxed"
+              data-zh="原始碼公開，採用 Commons Clause + MIT 授權 — 你可以讀、audit、自己 build、fork。Commons Clause 的作用是避免別人把 LTCast 重新打包拿去賣。我們發行的安裝檔採 freemium 模式：基本功能永久免費，Pro 訂閱 $49/年（或 $15 / 7 天）。"
+            >
+              Source is public under Commons Clause + MIT — read it, audit it, build it from
+              source, fork it. The Commons Clause prevents third parties from repackaging and
+              reselling LTCast itself. The binary we ship is freemium: basic features are free
+              forever, Pro is $49/year (or $15 for a 7-day pass).
             </p>
           </details>
         </div>
@@ -583,8 +713,13 @@
     <!-- Final CTA -->
     <section class="py-20 border-t border-white/5 bg-gradient-to-b from-ink-900 to-ink-950">
       <div class="max-w-3xl mx-auto px-6 text-center">
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight">Run your show from one app.</h2>
-        <p class="mt-4 text-white/70">
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight" data-zh="用一個 app 跑完整場秀。">
+          Run your show from one app.
+        </h2>
+        <p
+          class="mt-4 text-white/70"
+          data-zh="下載 LTCast、載入音軌，兩分鐘內就在送 LTC、MTC、MIDI Clock、Art-Net、OSC。"
+        >
           Download LTCast, load a track, and you're sending LTC, MTC, MIDI Clock, Art-Net, and OSC
           in under two minutes.
         </p>
@@ -593,12 +728,14 @@
             href="https://github.com/xyproai-bot/LTCast/releases/latest"
             class="inline-flex items-center gap-2 rounded-lg bg-white text-ink-950 font-semibold px-5 py-3 hover:bg-accent-400 transition"
             rel="noopener"
+            data-zh="下載免費試用"
             >Download free trial</a
           >
           <a
             href="https://ltcast.lemonsqueezy.com/checkout/buy/5e0a0420-39bc-406c-83e2-dc7d36464369?enabled=1518368"
             class="inline-flex items-center gap-2 rounded-lg bg-white/10 border border-white/15 px-5 py-3 font-semibold hover:bg-white/15 transition"
             rel="noopener"
+            data-zh="購買 Pro — $49/年"
             >Buy Pro — $49/year</a
           >
         </div>
@@ -616,13 +753,95 @@
           <a href="https://github.com/xyproai-bot/LTCast" class="hover:text-white" rel="noopener">GitHub</a>
           <a href="https://github.com/xyproai-bot/LTCast/issues" class="hover:text-white" rel="noopener">Issues</a>
           <a href="mailto:xypro.ai@gmail.com" class="hover:text-white">xypro.ai@gmail.com</a>
-          <a href="/press" class="hover:text-white">Press kit</a>
+          <a href="/press" class="hover:text-white" data-zh="媒體包">Press kit</a>
         </div>
       </div>
     </footer>
 
     <script>
+      // Dynamic year in footer
       document.getElementById('year').textContent = new Date().getFullYear();
+
+      // i18n: EN / zh-TW toggle. Single-page; preference persisted to localStorage
+      // and also honoured from ?lang=zh-TW URL param for shareable links.
+      (function () {
+        const META = {
+          en: {
+            title: 'LTCast — Professional Timecode Player for Live Shows',
+            description:
+              'Sync your show with precision timecode. LTCast reads and generates LTC, triggers MIDI cues, and sends MTC, MIDI Clock, Art-Net, and OSC — all from one app. Windows & macOS.',
+            ogTitle: 'LTCast — Professional Timecode Player',
+            ogDescription:
+              'One app. Every timecode protocol. LTC + MTC + MIDI Clock + Art-Net + OSC, simultaneously, on Windows and macOS.',
+          },
+          'zh-TW': {
+            title: 'LTCast — 現場演出專業 Timecode 播放器',
+            description:
+              '用精準 timecode 同步整場秀。LTCast 讀取與產生 LTC、觸發 MIDI cue、同時送出 MTC、MIDI Clock、Art-Net、OSC — 一個 app 全搞定。Windows & macOS。',
+            ogTitle: 'LTCast — 現場演出專業 Timecode 播放器',
+            ogDescription:
+              '一個 app 支援所有 timecode 協議。LTC + MTC + MIDI Clock + Art-Net + OSC 同時輸出，Windows & macOS 都能跑。',
+          },
+        };
+
+        function apply(lang) {
+          if (lang !== 'en' && lang !== 'zh-TW') lang = 'en';
+          document.documentElement.lang = lang;
+
+          document.querySelectorAll('[data-zh]').forEach((el) => {
+            if (el.dataset.enText === undefined) el.dataset.enText = el.textContent;
+            el.textContent = lang === 'zh-TW' ? el.dataset.zh : el.dataset.enText;
+          });
+          document.querySelectorAll('[data-zh-html]').forEach((el) => {
+            if (el.dataset.enHtml === undefined) el.dataset.enHtml = el.innerHTML;
+            el.innerHTML = lang === 'zh-TW' ? el.dataset.zhHtml : el.dataset.enHtml;
+          });
+
+          const meta = META[lang];
+          document.title = meta.title;
+          const descTag = document.querySelector('meta[name="description"]');
+          if (descTag) descTag.content = meta.description;
+          const ogTitle = document.querySelector('meta[property="og:title"]');
+          if (ogTitle) ogTitle.content = meta.ogTitle;
+          const ogDesc = document.querySelector('meta[property="og:description"]');
+          if (ogDesc) ogDesc.content = meta.ogDescription;
+          const twTitle = document.querySelector('meta[name="twitter:title"]');
+          if (twTitle) twTitle.content = meta.ogTitle;
+          const twDesc = document.querySelector('meta[name="twitter:description"]');
+          if (twDesc) twDesc.content = meta.ogDescription;
+
+          document.querySelectorAll('[data-lang-btn]').forEach((btn) => {
+            btn.setAttribute('aria-pressed', btn.dataset.langBtn === lang ? 'true' : 'false');
+          });
+
+          try {
+            localStorage.setItem('ltcast.lang', lang);
+          } catch (e) {
+            // localStorage may be blocked (private mode, embed, etc.) — fail silently
+          }
+        }
+
+        // Initial language pick: URL ?lang → localStorage → navigator.language → en
+        function detectInitial() {
+          try {
+            const url = new URLSearchParams(location.search).get('lang');
+            if (url === 'zh-TW' || url === 'en') return url;
+          } catch (e) {}
+          try {
+            const saved = localStorage.getItem('ltcast.lang');
+            if (saved === 'zh-TW' || saved === 'en') return saved;
+          } catch (e) {}
+          const nav = (navigator.language || '').toLowerCase();
+          if (nav.startsWith('zh')) return 'zh-TW';
+          return 'en';
+        }
+
+        apply(detectInitial());
+
+        document.querySelectorAll('[data-lang-btn]').forEach((btn) => {
+          btn.addEventListener('click', () => apply(btn.dataset.langBtn));
+        });
+      })();
     </script>
   </body>
 </html>
