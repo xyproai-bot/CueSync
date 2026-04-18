@@ -34,7 +34,7 @@ Do NOT use: "revolutionary", "simple", "easy", "beautiful", "world's first", an 
 > * **Licensing without a daemon.** Cloudflare Worker receives Lemon Squeezy webhooks; the app keeps a signed license in `safeStorage`, binds to a machine fingerprint, has a 30-day offline grace, and silently re-validates every 4 hours when online. No long-running service, no admin install.
 > * **Show-shaped features.** Pre-Show Check with countdowns, a Panic that tears down every output in one click, a CSV show log, a Remote Display served on `:3100` for phones/tablets at FOH, and a Bitfocus Companion module so a Stream Deck drives it.
 >
-> Free 14-day Pro trial. Pricing is $49/year or $15 for a one-off 7-day pass. Source is public under Commons Clause + MIT — free for personal and commercial productions, no redistribution.
+> Freemium binary: free tier + Pro at $49/year or $15 for a one-off 7-day pass. 14-day Pro trial on first install. Source is public under Commons Clause + MIT — read, audit, build, fork; the Commons Clause is what prevents third parties from repackaging and reselling LTCast itself.
 >
 > Happy to get into any of the above. I especially want to hear from anyone who's run timecode on Windows at scale — the failure modes have been strange and I bet there are more I haven't hit yet.
 

@@ -82,7 +82,7 @@ These go in `replies.md` next door so they can be copy-pasted during launch day.
 > Reaper is what a lot of us were using. The problem is that Reaper doesn't natively send Art-Net, and getting simultaneous LTC + MTC + MIDI Clock + OSC out of one session means chaining several scripts or JSFX plugins. It works until it doesn't, and when it doesn't, it's show night.
 
 ### "Is it open source?"
-> Source is public (Commons Clause + MIT). Free for personal and commercial productions. Redistribution / resale of the software itself isn't permitted — that's how we keep the lights on.
+> Source is public (Commons Clause + MIT) — read it, audit it, build it yourself, fork it. The Commons Clause prevents third parties from repackaging and reselling LTCast itself — that's how we keep the lights on. The binary we ship is freemium: free tier + paid Pro.
 
 ### "Will it run offline?"
 > Yes. 30-day offline grace after activation, silent re-validation when you're on a network. Venues with no internet are the default assumption, not an edge case.
