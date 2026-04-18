@@ -131,4 +131,4 @@ worker/             Cloudflare Worker — LemonSqueezy webhook + license validat
 
 [Commons Clause + MIT](LICENSE)
 
-Free to use for personal and commercial productions. Redistribution or resale of the software itself is not permitted.
+Source is open — read, audit, build from source, and fork it however suits you. The Commons Clause is what stops third parties from repackaging and reselling LTCast itself. The binary we ship is freemium: free tier + paid Pro.

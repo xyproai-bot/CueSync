@@ -92,4 +92,4 @@ src/
 
 [Commons Clause + MIT](LICENSE)
 
-個人與商業演出使用免費。不允許將本軟體重新包裝販售。
+原始碼公開 — 你可以自由讀取、audit、build、fork。Commons Clause 的作用是避免別人把 LTCast 重新打包拿去賣。我們發行的安裝檔採 freemium 模式：免費版 + Pro 訂閱。
